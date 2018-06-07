@@ -13,7 +13,7 @@ from dolfin import (MPI, TestFunction, TrialFunction, FunctionSpace,
                     UnitSquareMesh, UnitCubeMesh,
                     Expression, dot, grad, dx, ds, Function, solve, cpp)
 from dolfin.la import PETScOptions
-from dolfin_utils.test import gc_barrier
+from dolfin_utils.test import gc_barrier, skip_if_complex
 
 # Relative tolerance for regression test
 tol = 1e-10
