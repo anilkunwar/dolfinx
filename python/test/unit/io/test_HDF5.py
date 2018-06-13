@@ -9,8 +9,8 @@ import dolfin
 from dolfin import (HDF5File, MPI, UnitSquareMesh, UnitCubeMesh, MeshFunction,
                     MeshValueCollection, Expression, Cell, MeshEntity, MeshEntities,
                     Function, FunctionSpace, cpp)
-from dolfin_utils.test import (skip_if_not_HDF5, skip_if_complex, tempdir, 
-                                xfail_with_serial_hdf5_in_parallel)
+from dolfin_utils.test import (skip_if_not_HDF5, skip_if_complex, tempdir,
+                               xfail_with_serial_hdf5_in_parallel)
 from dolfin.la import PETScVector
 assert(tempdir)
 
@@ -22,6 +22,7 @@ def test_parallel(tempdir):
     hdf5 = HDF5File(MPI.comm_world, filename, "w")
     assert(hdf5)
 
+
 @skip_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
@@ -31,6 +32,7 @@ def test_save_vector(tempdir):
     x[:] = 1.0
     with HDF5File(MPI.comm_world, filename, "w") as vector_file:
         vector_file.write(x, "/my_vector")
+
 
 @skip_if_complex
 @skip_if_not_HDF5
@@ -164,6 +166,7 @@ def test_save_and_read_mesh_value_collection_with_only_one_marked_entity(tempdir
         assert MPI.sum(mesh.mpi_comm(), mvc.size()) == 1
         if MPI.rank(mesh.mpi_comm()) == 0:
             assert mvc.get_value(0, 0) == 1
+
 
 @skip_if_complex
 @skip_if_not_HDF5

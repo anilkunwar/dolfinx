@@ -7,7 +7,7 @@
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
 from dolfin import (cpp, UnitSquareMesh, MPI, FunctionSpace, has_petsc_complex,
-                    dx, dot, grad, TestFunction, TrialFunction, list_timings, 
+                    dx, dot, grad, TestFunction, TrialFunction, list_timings,
                     TimingType)
 from dolfin.la import PETScMatrix, PETScVector
 from numba import cfunc, types, carray, typeof

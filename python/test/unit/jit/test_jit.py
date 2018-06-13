@@ -143,6 +143,7 @@ def test_pass_array_int():
     ans = module.test_int_array(arr)
     assert ans == arr.sum() == 15
 
+
 @skip_if_complex
 def test_pass_array_double():
     import numpy
@@ -166,6 +167,7 @@ def test_pass_array_double():
     ans = module.test_double_array(arr)
     assert abs(arr.sum() - 15) < 1e-15
     assert abs(ans - 15) < 1e-15
+
 
 @skip_if_complex
 def test_compile_extension_module():

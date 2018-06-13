@@ -6,10 +6,11 @@
 
 import os
 from dolfin import (UnitSquareMesh, MPI, FunctionSpace, Function, Expression, HDF5File)
-from dolfin_utils.test import (skip_if_not_HDF5, tempdir, skip_if_complex, 
-                                xfail_with_serial_hdf5_in_parallel)
+from dolfin_utils.test import (skip_if_not_HDF5, tempdir, skip_if_complex,
+                               xfail_with_serial_hdf5_in_parallel)
 import dolfin.io
 assert(tempdir)
+
 
 @skip_if_complex
 @skip_if_not_HDF5

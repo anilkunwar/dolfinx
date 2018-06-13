@@ -179,6 +179,7 @@ def test_call(R, V, W, mesh):
     with pytest.raises(TypeError):
         u0([0, 0])
 
+
 @skip_if_complex
 def test_constant_float_conversion():
     c = Constant(3.45)
@@ -215,11 +216,13 @@ def test_interpolation_mismatch_rank0(W):
     with pytest.raises(RuntimeError):
         interpolate(f, W)
 
+
 @skip_if_complex
 def test_interpolation_mismatch_rank1(W):
     f = Expression(("1.0", "1.0"), degree=0)
     with pytest.raises(RuntimeError):
         interpolate(f, W)
+
 
 @skip_if_complex
 def test_interpolation_jit_rank0(V):
@@ -245,6 +248,7 @@ def test_near_evaluations(R, mesh):
     a_shift_xyz = Point(a[0] - offset / sqrt(3), a[1] - offset / sqrt(3),
                         a[2] - offset / sqrt(3)).array()
     assert round(u0(a)[0] - u0(a_shift_xyz)[0], 7) == 0
+
 
 @skip_if_complex
 def test_interpolation_jit_rank1(W):
