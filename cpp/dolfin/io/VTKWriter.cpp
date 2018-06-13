@@ -26,7 +26,6 @@
 using namespace dolfin;
 using namespace dolfin::io;
 
-
 //----------------------------------------------------------------------------
 void VTKWriter::write_mesh(const mesh::Mesh& mesh, std::size_t cell_dim,
                            std::string filename)
@@ -52,8 +51,8 @@ void VTKWriter::write_cell_data(const function::Function& u,
   if (rank > 2)
   {
     log::dolfin_error("VTKFile.cpp", "write data to VTK file",
-                 "Don't know how to handle vector function with dimension "
-                 "other than 2 or 3");
+                      "Don't know how to handle vector function with dimension "
+                      "other than 2 or 3");
   }
 
   // Get number of components
@@ -74,9 +73,10 @@ void VTKWriter::write_cell_data(const function::Function& u,
   {
     if (!(data_dim == 2 || data_dim == 3))
     {
-      log::dolfin_error("VTKWriter.cpp", "write data to VTK file",
-                   "Don't know how to handle vector function with dimension "
-                   "other than 2 or 3");
+      log::dolfin_error(
+          "VTKWriter.cpp", "write data to VTK file",
+          "Don't know how to handle vector function with dimension "
+          "other than 2 or 3");
     }
     fp << "<CellData  Vectors=\"" << u.name() << "\"> " << std::endl;
     fp << "<DataArray  type=\"Float64\"  Name=\"" << u.name()
@@ -86,9 +86,10 @@ void VTKWriter::write_cell_data(const function::Function& u,
   {
     if (!(data_dim == 4 || data_dim == 9))
     {
-      log::dolfin_error("VTKFile.cpp", "write data to VTK file",
-                   "Don't know how to handle tensor function with dimension "
-                   "other than 4 or 9");
+      log::dolfin_error(
+          "VTKFile.cpp", "write data to VTK file",
+          "Don't know how to handle tensor function with dimension "
+          "other than 4 or 9");
     }
     fp << "<CellData  Tensors=\"" << u.name() << "\"> " << std::endl;
     fp << "<DataArray  type=\"Float64\"  Name=\"" << u.name()
@@ -115,11 +116,21 @@ void VTKWriter::write_cell_data(const function::Function& u,
   }
 
   // Get  values
-  std::vector<double> values(dof_set.size());
   assert(u.vector());
-  #ifndef PETSC_USE_COMPLEX
+#ifdef PETSC_USE_COMPLEX
+  // fixme: Use Eigen::VectorXcd
+  std::vector<PetscScalar> values_complex(dof_set.size());
+  u.vector()->get_local(values_complex.data(), dof_set.size(), dof_set.data());
+  std::vector<double> values(dof_set.size());
+  for (int i = 0; i < dof_set.size(); i++)
+  {
+    values[i] = std::real(values_complex[i]);
+  }
+
+#else
+  std::vector<double> values(dof_set.size());
   u.vector()->get_local(values.data(), dof_set.size(), dof_set.data());
-  #endif
+#endif
 
   // Get cell data
   fp << ascii_cell_data(mesh, offset, values, data_dim, rank);
@@ -185,9 +196,10 @@ void VTKWriter::write_ascii_mesh(const mesh::Mesh& mesh, std::size_t cell_dim,
   file.precision(16);
   if (!file.is_open())
   {
-    log::dolfin_error("VTKWriter.cpp", "write mesh to VTK file"
-                                  "Unable to open file \"%s\"",
-                 filename.c_str());
+    log::dolfin_error("VTKWriter.cpp",
+                      "write mesh to VTK file"
+                      "Unable to open file \"%s\"",
+                      filename.c_str());
   }
 
   // Write vertex positions
@@ -263,7 +275,7 @@ std::uint8_t VTKWriter::vtk_cell_type(const mesh::Mesh& mesh,
   else
   {
     log::dolfin_error("VTKWriter.cpp", "write data to VTK file",
-                 "Unknown cell type (%d)", cell_type);
+                      "Unknown cell type (%d)", cell_type);
   }
 
   return vtk_cell_type;

@@ -89,6 +89,8 @@ equation.  For convenience we also include the DOLFIN namespace.
    #include "Poisson.h"
    #include <dolfin.h>
 
+   using EigenRowArrayXXcd = Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                       Eigen::Dynamic, Eigen::RowMajor>; 
    using namespace dolfin;
 
 Then follows the definition of the coefficient functions (for
@@ -103,7 +105,7 @@ Then follows the definition of the coefficient functions (for
    public:
      Source() : function::Expression({}) {}
 
-     void eval(Eigen::Ref<EigenRowArrayXXd> values,
+     void eval(Eigen::Ref<EigenRowArrayXXcd> values,
             Eigen::Ref<const EigenRowArrayXXd> x) const
      {
      for (unsigned int i = 0; i != x.rows(); ++i)
@@ -121,7 +123,7 @@ Then follows the definition of the coefficient functions (for
    public:
      dUdN() : function::Expression({}) {}
 
-     void eval(Eigen::Ref<EigenRowArrayXXd> values,
+     void eval(Eigen::Ref<EigenRowArrayXXcd> values,
             Eigen::Ref<const EigenRowArrayXXd> x) const
      {
        for (unsigned int i = 0; i != x.rows(); ++i)

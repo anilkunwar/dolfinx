@@ -142,7 +142,7 @@ void Expression::restrict(
   // Apply a mapping to the reference element.
   // FIXME: not needed for Lagrange elements, eliminate.
   // See: ffc/uflacs/backends/ufc/evaluatedof.py:_change_variables()
-  element.map_dofs(w, eval_values, coordinate_dofs);
+  element.transform_values(w, eval_values, coordinate_dofs);
 }
 //-----------------------------------------------------------------------------
 Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
