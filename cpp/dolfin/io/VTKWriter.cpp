@@ -122,7 +122,7 @@ void VTKWriter::write_cell_data(const function::Function& u,
   std::vector<PetscScalar> values_complex(dof_set.size());
   u.vector()->get_local(values_complex.data(), dof_set.size(), dof_set.data());
   std::vector<double> values(dof_set.size());
-  for (int i = 0; i < dof_set.size(); i++)
+  for (unsigned int i = 0; i < dof_set.size(); i++)
   {
     values[i] = std::real(values_complex[i]);
   }
