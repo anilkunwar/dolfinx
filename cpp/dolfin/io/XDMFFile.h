@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <petscsys.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,13 +29,13 @@ namespace filesystem
 {
 class path;
 }
-}
+} // namespace boost
 
 namespace pugi
 {
 class xml_node;
 class xml_document;
-}
+} // namespace pugi
 
 namespace dolfin
 {
@@ -42,7 +43,7 @@ namespace function
 {
 class Function;
 class FunctionSpace;
-}
+} // namespace function
 
 namespace geometry
 {
@@ -58,7 +59,7 @@ class MeshFunction;
 template <typename T>
 class MeshValueCollection;
 class MeshPartitioning;
-}
+} // namespace mesh
 
 namespace io
 {
@@ -97,11 +98,26 @@ public:
     ASCII
   };
 
+  /// Field component
+  enum class Component
+  {
+    Real,
+    Imaginary,
+    Both
+  };
+
 /// Default encoding type
 #ifdef HAS_HDF5
   static const Encoding default_encoding = Encoding::HDF5;
 #else
   static const Encoding default_encoding = Encoding::ASCII;
+#endif
+
+/// Default component of the field
+#ifdef PETSC_USE_COMPLEX
+  static const Component default_component = Component::Real;
+#else
+  static const Component default_component = Component::Real;
 #endif
 
   /// Constructor
@@ -171,7 +187,8 @@ public:
   /// @param    encoding (_Encoding_)
   ///         Encoding to use: HDF5 or ASCII
   ///
-  void write(const function::Function& u, Encoding encoding = default_encoding);
+  void write(const function::Function& u, Encoding encoding = default_encoding,
+             Component component = default_component);
 
   /// Save a function::Function with timestamp to XDMF file for visualisation,
   /// using an associated HDF5 file, or storing the data inline as
@@ -321,8 +338,7 @@ public:
   ///        Ghost mode for mesh partition
   /// @returns mesh::Mesh
   ///        Mesh
-  mesh::Mesh read_mesh(MPI_Comm comm,
-                       const mesh::GhostMode ghost_mode) const;
+  mesh::Mesh read_mesh(MPI_Comm comm, const mesh::GhostMode ghost_mode) const;
 
   /// Read a function from the XDMF file. Supplied function must
   /// come with already initialized and compatible function space.
@@ -537,14 +553,16 @@ private:
 
   // Get point data values for linear or quadratic mesh into flattened
   // 2D array
-  static std::vector<double> get_point_data_values(const function::Function& u);
+  static std::vector<PetscScalar>
+  get_point_data_values(const function::Function& u);
 
   // Get point data values collocated at P2 geometry points (vertices
   // and edges) flattened as a 2D array
   static std::vector<double> get_p2_data_values(const function::Function& u);
 
   // Get cell data values as a flattened 2D array
-  static std::vector<double> get_cell_data_values(const function::Function& u);
+  static std::vector<PetscScalar>
+  get_cell_data_values(const function::Function& u);
 
   // Check that string is the same on all processes. Returns true of
   // same on all processes.
@@ -609,5 +627,5 @@ inline void XDMFFile::add_data_item(MPI_Comm comm, pugi::xml_node& xml_node,
   add_data_item(comm, xml_node, h5_id, h5_path, x_int, shape, number_type);
 }
 #endif
-}
-}
+} // namespace io
+} // namespace dolfin

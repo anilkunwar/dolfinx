@@ -228,15 +228,23 @@ void io(py::module& m)
       .value("HDF5", dolfin::io::XDMFFile::Encoding::HDF5)
       .value("ASCII", dolfin::io::XDMFFile::Encoding::ASCII);
 
+  // dolfin::io::XDMFFile::Component enums
+  py::enum_<dolfin::io::XDMFFile::Component>(xdmf_file, "Component")
+      .value("Real", dolfin::io::XDMFFile::Component::Real)
+      .value("Imaginary", dolfin::io::XDMFFile::Component::Imaginary)
+      .value("Both", dolfin::io::XDMFFile::Component::Both);
+
   // dolfin::io::XDMFFile::write
   xdmf_file
       // Function
       .def("write",
            (void (dolfin::io::XDMFFile::*)(const dolfin::function::Function&,
-                                           dolfin::io::XDMFFile::Encoding))
+                                           dolfin::io::XDMFFile::Encoding,
+                                           dolfin::io::XDMFFile::Component))
                & dolfin::io::XDMFFile::write,
            py::arg("u"),
-           py::arg("encoding") = dolfin::io::XDMFFile::Encoding::HDF5)
+           py::arg("encoding") = dolfin::io::XDMFFile::Encoding::HDF5,
+           py::arg("component") = dolfin::io::XDMFFile::Component::Real)
       .def("write",
            (void (dolfin::io::XDMFFile::*)(const dolfin::function::Function&,
                                            double,
