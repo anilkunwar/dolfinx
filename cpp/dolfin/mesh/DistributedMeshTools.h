@@ -86,6 +86,7 @@ public:
       MPI_Comm mpi_comm, const Eigen::Ref<const EigenRowArrayXXd>& values,
       const std::vector<std::int64_t>& global_indices);
 
+  // FIXME: Should use templates
   static EigenRowArrayXXcd reorder_values_by_global_indices(
       MPI_Comm mpi_comm, const Eigen::Ref<const EigenRowArrayXXcd>& values,
       const std::vector<std::int64_t>& global_indices);
