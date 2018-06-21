@@ -27,7 +27,7 @@ Finally, we define the bilinear and linear forms according to the
 variational formulation of the equations::
 
    a = inner(grad(u), grad(v))*dx
-   L = f*v*dx + g*v*ds
+   L = dot(f, v)*dx + dot(g, v)*ds
 
 Before the form file can be used in the C++ program, it must be
 compiled using FFC by running (on the command-line):
