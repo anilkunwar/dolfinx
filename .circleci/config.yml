@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: quay.io/fenicsproject/dolfinx:docker
+      - image: quay.io/igorbaratta/dolfinx-complex:latest
     environment:
       MPLBACKEND: "agg"
       DOLFIN_NOPLOT: 1
@@ -17,9 +17,9 @@ jobs:
           command: |
             pip3 uninstall --yes fenics-fiat fenics-ufl fenics-dijitso fenics-ffc
             pip3 install git+https://bitbucket.org/fenics-project/fiat.git --upgrade
-            pip3 install git+https://bitbucket.org/fenics-project/ufl.git --upgrade
+            pip3 install git+https://bitbucket.org/fenics-project/ufl.git@firedrake/complex --upgrade
             pip3 install git+https://bitbucket.org/fenics-project/dijitso.git --upgrade
-            pip3 install git+https://github.com/IgorBaratta/ffcx.git --upgrade
+            pip3 install git+https://github.com/ffc/ffcx.git --upgrade
             rm -rf /usr/local/include/dolfin /usr/local/include/dolfin.h
       - run:
           name: Flake8 checks on Python code
@@ -55,7 +55,7 @@ jobs:
             python3 -m ffc -l dolfin -fscalar_type='double complex' Poisson.ufl
             cmake -G Ninja .
             ninja
-            # ./demo_poisson
+            ./demo_poisson
 
       - run:
           name: Build Python interface
