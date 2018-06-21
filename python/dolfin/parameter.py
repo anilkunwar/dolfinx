@@ -73,8 +73,8 @@ def ffc_default_parameters():
             p[key] = None
         else:
             p.add(key, value)
-    
-    # Define scalar type 
+
+    # Define scalar type
     if has_petsc_complex():
         p.add("scalar_type", "double complex")
     else:
