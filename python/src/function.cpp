@@ -45,13 +45,16 @@ void function(py::module& m)
       // FIXME: Add C++ version that takes a dolfin::mesh::Cell
       .def("eval",
            [](const dolfin::function::GenericFunction& self,
-              Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> u,
+              Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                      Eigen::Dynamic, Eigen::RowMajor>>
+                  u,
               Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
               const dolfin::mesh::Cell& cell) { self.eval(u, x, cell); },
            "Evaluate GenericFunction (cell version)")
       .def("eval",
            (void (dolfin::function::GenericFunction::*)(
-               Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>,
+               Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                       Eigen::Dynamic, Eigen::RowMajor>>,
                Eigen::Ref<const dolfin::EigenRowArrayXXd>) const)
                & dolfin::function::GenericFunction::eval,
            py::arg("values"), py::arg("x"), "Evaluate GenericFunction")
@@ -94,13 +97,17 @@ void function(py::module& m)
   {
     using dolfin::function::Expression::Expression;
 
-    void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> values,
+    void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                      Eigen::Dynamic, Eigen::RowMajor>>
+                  values,
               Eigen::Ref<const dolfin::EigenRowArrayXXd> x) const override
     {
       PYBIND11_OVERLOAD(void, dolfin::function::Expression, eval, values, x);
     }
 
-    void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> values,
+    void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                      Eigen::Dynamic, Eigen::RowMajor>>
+                  values,
               Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
               const dolfin::mesh::Cell& cell) const override
     {
@@ -120,7 +127,9 @@ void function(py::module& m)
       .def("__call__",
            [](const dolfin::function::Expression& self,
               Eigen::Ref<const dolfin::EigenRowArrayXXd> x) {
-             Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> f(x.rows(), self.value_size());
+             Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                          Eigen::RowMajor>
+                 f(x.rows(), self.value_size());
              self.eval(f, x);
              return f;
            })
@@ -176,8 +185,8 @@ void function(py::module& m)
       .def("assign",
            [](dolfin::function::Constant& self,
               const dolfin::function::Constant& other) { self = other; })
-      .def("assign",
-           [](dolfin::function::Constant& self, PetscScalar value) { self = value; })
+      .def("assign", [](dolfin::function::Constant& self,
+                        PetscScalar value) { self = value; })
       /*
       .def("_assign", (const dolfin::function::Constant&
       (dolfin::function::Constant::*)(const
@@ -219,7 +228,9 @@ void function(py::module& m)
       .def("__call__",
            [](dolfin::function::Function& self,
               Eigen::Ref<const dolfin::EigenRowArrayXXd> x) {
-             Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> values(x.rows(), self.value_size());
+             Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                          Eigen::RowMajor>
+                 values(x.rows(), self.value_size());
              self.eval(values, x);
              return values;
            })
