@@ -10,6 +10,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/multi_array.hpp>
 #include <boost/unordered_map.hpp>
+#include <complex>
 #include <cstdio>
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/Timer.h>
@@ -140,11 +141,11 @@ void HDF5File::write(const la::PETScVector& x, const std::string dataset_name)
   x.get_local(local_data);
 
   std::vector<double> real_data(local_data.size(), 0.0);
-  for (unsigned i=0; i<local_data.size(); i++)
-    {
-      real_data[i] = local_data[i].real();
-    }
-  
+  for (unsigned i = 0; i < local_data.size(); i++)
+  {
+    real_data[i] = std::real(local_data[i]);
+  }
+
   // Write data to file
   const auto local_range = x.local_range();
   const bool chunking = parameters["chunking"];
