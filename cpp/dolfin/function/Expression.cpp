@@ -71,13 +71,13 @@ std::vector<std::size_t> Expression::value_shape() const
   return _value_shape;
 }
 //-----------------------------------------------------------------------------
-void Expression::set_property(std::string name, double value)
+void Expression::set_property(std::string name, PetscScalar value)
 {
   throw std::runtime_error(
       "Expression::set_property should be overloaded in the derived class");
 }
 //-----------------------------------------------------------------------------
-double Expression::get_property(std::string name) const
+PetscScalar Expression::get_property(std::string name) const
 {
   throw std::runtime_error(
       "Expression::get_property should be overloaded in the derived class");
@@ -133,10 +133,6 @@ void Expression::restrict(
 
   // Evaluate all points in one call
   eval(eval_values, eval_points, cell);
-
-  // Transpose for vector values
-  // FIXME: remove need for this - needs work in ffc
-  eval_values.transposeInPlace();
 
   // FIXME: *do not* use UFC directly
   // Apply a mapping to the reference element.

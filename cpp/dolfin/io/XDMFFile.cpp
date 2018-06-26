@@ -1777,7 +1777,6 @@ void XDMFFile::add_data_item(MPI_Comm comm, pugi::xml_node& xml_node,
                              const std::vector<std::int64_t> shape,
                              const std::string number_type)
 {
-
   log::log(DBG, "Adding data item to node %s", xml_node.path().c_str());
 
   // Add DataItem node
@@ -2789,13 +2788,14 @@ XDMFFile::get_point_data_values(const function::Function& u)
 
   // FIXME: Unpick the below code for the new layout of data from
   //        GenericFunction::compute_vertex_values
-  const std::size_t num_local_vertices = mesh->num_entities(0);
-  std::vector<PetscScalar> _data_values(width * num_local_vertices, 0.0);
+  const std::size_t num_local_points = mesh->geometry().num_points();
+  std::vector<PetscScalar> _data_values(width * num_local_points, 0.0);
+
   if (u.value_rank() > 0)
   {
     // Transpose vector/tensor data arrays
     const std::size_t value_size = u.value_size();
-    for (std::size_t i = 0; i < num_local_vertices; i++)
+    for (std::size_t i = 0; i < num_local_points; i++)
     {
       for (std::size_t j = 0; j < value_size; j++)
       {

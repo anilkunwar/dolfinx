@@ -164,7 +164,7 @@ public:
 
   /// Restrict function to local cell (compute expansion coefficients w)
   ///
-  /// @param    w (list of doubles)
+  /// @param    w (list of PetscScalars)
   ///         Expansion coefficients.
   /// @param    element (_FiniteElement_)
   ///         The element.

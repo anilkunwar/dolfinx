@@ -108,10 +108,8 @@ std::string Constant::str(bool verbose) const
         ossv << "Values: ";
         ossv << "(";
         // Avoid a trailing ", "
-#ifndef PETSC_USE_COMPLEX
         std::copy(_values.begin(), _values.end() - 1,
-                  std::ostream_iterator<double>(ossv, ", "));
-#endif
+                  std::ostream_iterator<PetscScalar>(ossv, ", "));
         ossv << _values.back();
         ossv << ")";
       }

@@ -59,7 +59,7 @@ void common(py::module& m)
   m.def("has_scotch", &dolfin::has_scotch);
   m.def("has_petsc_complex", &dolfin::has_petsc_complex,
         "Return `True` if DOLFIN is configured with PETSc compiled with "
-        "complex scalar type");
+        "scalars represented as complex numbers ");
   m.def("has_slepc", &dolfin::has_slepc,
         "Return `True` if DOLFIN is configured with SLEPc");
   m.def("has_petsc4py",
