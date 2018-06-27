@@ -82,13 +82,9 @@ public:
   ///    Values to reorder
   /// @param global_indices
   ///    Global index for each row of values
-  static EigenRowArrayXXd reorder_values_by_global_indices(
-      MPI_Comm mpi_comm, const Eigen::Ref<const EigenRowArrayXXd>& values,
-      const std::vector<std::int64_t>& global_indices);
-
-  // FIXME: Should use templates
-  static EigenRowArrayXXcd reorder_values_by_global_indices(
-      MPI_Comm mpi_comm, const Eigen::Ref<const EigenRowArrayXXcd>& values,
+  template <typename Derived>
+  static Eigen::ArrayBase<Derived> reorder_values_by_global_indices(
+      MPI_Comm mpi_comm, const Eigen::ArrayBase<Derived>& values,
       const std::vector<std::int64_t>& global_indices);
 
 private:
