@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #include "VectorSpaceBasis.h"
+#include "PETScMatrix.h"
 #include "PETScVector.h"
 #include <cmath>
 #include <dolfin/common/constants.h>
@@ -81,6 +82,20 @@ bool VectorSpaceBasis::is_orthogonal(double tol) const
   return true;
 }
 //-----------------------------------------------------------------------------
+bool VectorSpaceBasis::in_nullspace(const PETScMatrix& A, double tol) const
+{
+  PETScVector y = A.init_vector(0);
+  for (auto x : _basis)
+  {
+    A.mult(*x, y);
+    const double norm = y.norm(la::Norm::l2);
+    if (norm > tol)
+      return false;
+  }
+
+  return true;
+}
+//-----------------------------------------------------------------------------
 void VectorSpaceBasis::orthogonalize(PETScVector& x) const
 {
   for (std::size_t i = 0; i < _basis.size(); i++)
@@ -93,7 +108,7 @@ void VectorSpaceBasis::orthogonalize(PETScVector& x) const
 //-----------------------------------------------------------------------------
 std::size_t VectorSpaceBasis::dim() const { return _basis.size(); }
 //-----------------------------------------------------------------------------
-std::shared_ptr<const PETScVector> VectorSpaceBasis::
+std::shared_ptr<const la::PETScVector> VectorSpaceBasis::
 operator[](std::size_t i) const
 {
   assert(i < _basis.size());
