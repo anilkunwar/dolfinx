@@ -217,9 +217,9 @@ void ParallelRefinement::create_new_vertices()
   for (std::size_t i = 0; i < num_new_vertices; i++)
     global_indices.push_back(i + global_offset);
 
-  Eigen::Map<EigenRowArrayXXd> old_tmp(_new_vertex_coordinates.data(),
-                                       _new_vertex_coordinates.size() / gdim,
-                                       gdim);
+  EigenRowArrayXXd old_tmp = Eigen::Map<EigenRowArrayXXd>(
+      _new_vertex_coordinates.data(), _new_vertex_coordinates.size() / gdim,
+      gdim);
   EigenRowArrayXXd tmp
       = mesh::DistributedMeshTools::reorder_values_by_global_indices(
           _mesh.mpi_comm(), old_tmp, global_indices);
