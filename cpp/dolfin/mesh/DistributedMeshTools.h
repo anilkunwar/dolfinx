@@ -83,14 +83,17 @@ public:
   ///    Values to reorder
   /// @param global_indices
   ///    Global index for each row of values
-  template <typename Derived>
-  static Eigen::ArrayBase<Derived> reorder_values_by_global_indices(
-      MPI_Comm mpi_comm, const Eigen::ArrayBase<Derived>& values,
+  template <typename T>
+  static Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+  reorder_values_by_global_indices(
+      MPI_Comm mpi_comm,
+      const Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
+          values,
       const std::vector<std::int64_t>& global_indices)
   {
     common::Timer t("DistributedMeshTools: reorder values");
 
-    typedef typename Derived::Scalar Scalar;
+    using Scalar = T;
 
     // Number of items to redistribute
     const std::size_t num_local_indices = global_indices.size();

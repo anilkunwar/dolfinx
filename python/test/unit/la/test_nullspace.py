@@ -14,6 +14,7 @@ from dolfin import (MPI, Constant, Point, TestFunction, TrialFunction,
 from dolfin.cpp.generation import BoxMesh
 from dolfin.cpp.mesh import CellType, GhostMode
 from dolfin.fem import assembling
+from dolfin_utils.test import skip_if_complex
 from ufl import dx, grad, inner
 
 
@@ -107,6 +108,7 @@ def test_nullspace_orthogonal(mesh, degree):
         ghost_mode=GhostMode.none),
 ])
 @pytest.mark.parametrize("degree", [1, 2])
+@skip_if_complex
 def test_nullspace_check(mesh, degree):
     V = VectorFunctionSpace(mesh, 'Lagrange', degree)
     u, v = TrialFunction(V), TestFunction(V)
