@@ -117,6 +117,7 @@ def xtest_matrix_assembly_block():
     assert Anorm0 == pytest.approx(Anorm2, 1.0e-9)
     assert bnorm0 == pytest.approx(bnorm2, 1.0e-9)
 
+
 @skip_if_complex
 def test_assembly_solve_block():
     """Solve a two-field mass-matrix like problem with block matrix approaches
