@@ -574,7 +574,7 @@ DofMapBuilder::extract_global_dofs(
       }
 
       // Single global dof
-      int64_t dof_local = 0;
+      std::int64_t dof_local = 0;
 
       // Insert global dof index
       std::pair<std::set<std::size_t>::iterator, bool> ret
