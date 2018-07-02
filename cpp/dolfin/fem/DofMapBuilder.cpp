@@ -50,6 +50,8 @@ DofMapBuilder::build(const ufc_dofmap& ufc_map, const mesh::Mesh& mesh)
   // FIXME: Use ufc_dofmap.num_global_support_dofs attribute to
   // simplify.
 
+  const std::int64_t num_global_support_dofs = ufc_map.num_global_support_dofs;
+
   // NOTE: We test for global dofs here because the the function
   // DofMapBuilder::compute_block size cannot distinguish between
   // global and discontinuous Lagrange elements because the UFC dofmap
@@ -552,39 +554,26 @@ DofMapBuilder::extract_global_dofs(
   if (ufc_map.num_sub_dofmaps == 0)
   {
     // Check if dofmap is for global dofs
-    bool global_dof = true;
-    for (std::size_t d = 0; d < num_mesh_entities_local.size(); ++d)
+
+    unsigned int d = 0;
+    std::size_t ndofs = 0;
+    for (auto& n : num_mesh_entities_local)
     {
-      if (ufc_map.num_entity_dofs[d] > 0)
-      {
-        global_dof = false;
-        break;
-      }
+      ndofs += n * ufc_map.num_entity_dofs[d];
+      ++d;
     }
 
-    if (global_dof)
+    if (ndofs == 0)
     {
-      unsigned int d = 0;
-      std::size_t ndofs = 0;
-      for (auto& n : num_mesh_entities_local)
-      {
-        ndofs += n * ufc_map.num_entity_dofs[d];
-        ++d;
-      }
-
       // Check that we have just one dof
-      if (ndofs != 1)
+      if (ufc_map.num_global_support_dofs != 1)
       {
         throw std::runtime_error("Computing global degrees of freedom - global "
                                  "degree of freedom has dimension != 1");
       }
 
-      // Create dummy entity_indices argument to tabulate single
-      // global dof
-      const int64_t** dummy_entity_indices = nullptr;
+      // Single global dof
       int64_t dof_local = 0;
-      ufc_map.tabulate_dofs(&dof_local, num_mesh_entities_local.data(),
-                            dummy_entity_indices);
 
       // Insert global dof index
       std::pair<std::set<std::size_t>::iterator, bool> ret
