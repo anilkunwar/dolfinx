@@ -50,7 +50,8 @@ DofMapBuilder::build(const ufc_dofmap& ufc_map, const mesh::Mesh& mesh)
   // FIXME: Use ufc_dofmap.num_global_support_dofs attribute to
   // simplify.
 
-  const std::int64_t num_global_support_dofs = ufc_map.num_global_support_dofs;
+  //  const std::int64_t num_global_support_dofs =
+  //  ufc_map.num_global_support_dofs;
 
   // NOTE: We test for global dofs here because the the function
   // DofMapBuilder::compute_block size cannot distinguish between
