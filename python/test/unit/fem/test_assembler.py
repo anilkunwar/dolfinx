@@ -150,7 +150,7 @@ def test_assembly_solve_block():
     a01 = zero * inner(p, v) * dx
     a10 = zero * inner(u, q) * dx
     a11 = inner(p, q) * dx
-    L0 = inner(f,  v) * dx
+    L0 = inner(f, v) * dx
     L1 = inner(g, q) * dx
 
     def monitor(ksp, its, rnorm):
@@ -203,7 +203,7 @@ def test_assembly_solve_block():
     u0, u1 = dolfin.function.argument.TrialFunctions(W)
     v0, v1 = dolfin.function.argument.TestFunctions(W)
     a = inner(u0, v0) * dx + inner(u1, v1) * dx
-    L = inner(f, v0) * ufl.dx + inner(g,  v1) * dx
+    L = inner(f, v0) * ufl.dx + inner(g, v1) * dx
 
     u_bc = dolfin.function.constant.Constant((50.0, 20.0))
     bc = dolfin.fem.dirichletbc.DirichletBC(W, u_bc, boundary)
