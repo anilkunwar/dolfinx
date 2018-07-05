@@ -10,8 +10,8 @@ import pytest
 import dolfin
 from dolfin import MPI, compile_cpp_code
 from dolfin.la import PETScVector
-from dolfin_utils.test import (skip_if_not_SLEPc, skip_if_complex,
-                               skip_in_serial, skip_if_not_petsc4py)
+from dolfin_utils.test import (skip_if_not_SLEPc, skip_in_serial, 
+                               skip_if_not_petsc4py)
 
 
 # @pytest.mark.skip
@@ -144,7 +144,6 @@ def test_pass_array_int():
     assert ans == arr.sum() == 15
 
 
-@skip_if_complex
 def test_pass_array_double():
     import numpy
 
@@ -169,7 +168,6 @@ def test_pass_array_double():
     assert abs(ans - 15) < 1e-15
 
 
-@skip_if_complex
 def test_compile_extension_module():
 
     # This test should do basically the same as the docstring of the

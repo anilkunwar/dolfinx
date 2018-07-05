@@ -14,7 +14,6 @@ from dolfin import (MPI, Constant, Point, TestFunction, TrialFunction,
 from dolfin.cpp.generation import BoxMesh
 from dolfin.cpp.mesh import CellType, GhostMode
 from dolfin.fem import assembling
-from dolfin_utils.test import skip_if_complex
 from ufl import dx, grad, inner
 
 
@@ -108,7 +107,6 @@ def test_nullspace_orthogonal(mesh, degree):
         ghost_mode=GhostMode.none),
 ])
 @pytest.mark.parametrize("degree", [1, 2])
-@skip_if_complex
 def test_nullspace_check(mesh, degree):
     V = VectorFunctionSpace(mesh, 'Lagrange', degree)
     u, v = TrialFunction(V), TestFunction(V)
@@ -123,9 +121,9 @@ def test_nullspace_check(mesh, degree):
         return 2.0 * mu * ufl.sym(grad(w)) + lmbda * ufl.tr(
             grad(w)) * ufl.Identity(gdim)
 
-    a = inner(grad(v), sigma(u, mesh.geometry.dim)) * dx
+    a = inner(sigma(u, mesh.geometry.dim), grad(v)) * dx
     zero = mesh.geometry.dim * (0.0, )
-    L = inner(v, Constant(zero)) * dx
+    L = inner(Constant(zero), v) * dx
 
     # Assemble matrix and create compatible vector
     A, L = assembling.assemble_system(a, L, [])

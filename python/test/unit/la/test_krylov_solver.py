@@ -12,18 +12,16 @@ from dolfin import (UnitSquareMesh, FunctionSpace, MPI, TrialFunction, TestFunct
                     Function, DirichletBC, fem)
 from dolfin.la import PETScKrylovSolver, PETScVector, PETScMatrix, PETScOptions, VectorSpaceBasis
 from dolfin.fem.assembling import assemble_system
-from dolfin_utils.test import skip_if_complex
 
 
-@skip_if_complex
 def test_krylov_solver_lu():
 
     mesh = UnitSquareMesh(MPI.comm_world, 12, 12)
     V = FunctionSpace(mesh, "Lagrange", 1)
     u, v = TrialFunction(V), TestFunction(V)
 
-    a = Constant(1.0) * u * v * dx
-    L = Constant(1.0) * v * dx
+    a = Constant(1.0) * inner(u, v) * dx
+    L = inner(Constant(1.0), v) * dx
     assembler = fem.assembling.Assembler(a, L)
     A, b = assembler.assemble()
 

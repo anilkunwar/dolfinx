@@ -11,9 +11,9 @@ parallel assembly/solve."""
 
 from dolfin import (MPI, TestFunction, TrialFunction, FunctionSpace,
                     UnitSquareMesh, UnitCubeMesh,
-                    Expression, dot, grad, dx, ds, Function, solve, cpp)
+                    Expression, inner, grad, dx, ds, Function, solve, cpp)
 from dolfin.la import PETScOptions
-from dolfin_utils.test import gc_barrier, skip_if_complex
+from dolfin_utils.test import gc_barrier
 
 # Relative tolerance for regression test
 tol = 1e-10
@@ -30,8 +30,8 @@ def compute_norm(mesh, degree):
     u = TrialFunction(V)
     f = Expression("sin(x[0])", degree=degree)
     g = Expression("x[0]*x[1]", degree=degree)
-    a = dot(grad(v), grad(u)) * dx + v * u * dx
-    L = v * f * dx - v * g * ds
+    a = inner(grad(u), grad(v)) * dx + inner(u, v) * dx
+    L = inner(f, v) * dx - inner(g, v) * ds
 
     # Compute solution
     w = Function(V)
@@ -95,7 +95,6 @@ def print_errors(errors):
     MPI.barrier(MPI.comm_world)
 
 
-@skip_if_complex
 def test_computed_norms_against_references():
     # Reference values for norm of solution vector
     reference = {("16x16 unit tri square", 1): 9.547454087328376,

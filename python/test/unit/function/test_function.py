@@ -227,20 +227,18 @@ def test_interpolation_mismatch_rank0(W):
         interpolate(f, W)
 
 
-@skip_if_complex
 def test_interpolation_mismatch_rank1(W):
     f = Expression(("1.0", "1.0"), degree=0)
     with pytest.raises(RuntimeError):
         interpolate(f, W)
 
 
-@skip_if_complex
 def test_interpolation_jit_rank0(V):
     f = Expression("1.0", degree=0)
     w = interpolate(f, V)
     x = w.vector()
-    assert MPI.max(MPI.comm_world, x.get_local().max()) == 1
-    assert MPI.min(MPI.comm_world, x.get_local().min()) == 1
+    assert MPI.max(MPI.comm_world, abs(x.get_local()).max()) == 1
+    assert MPI.min(MPI.comm_world, abs(x.get_local()).min()) == 1
 
 
 @skip_in_parallel
@@ -260,16 +258,14 @@ def test_near_evaluations(R, mesh):
     assert round(u0(a)[0] - u0(a_shift_xyz)[0], 7) == 0
 
 
-@skip_if_complex
 def test_interpolation_jit_rank1(W):
     f = Expression(("1.0", "1.0", "1.0"), degree=0)
     w = interpolate(f, W)
     x = w.vector()
-    assert x.get_local().max() == 1
-    assert x.get_local().min() == 1
+    assert abs(x.get_local()).max() == 1
+    assert abs(x.get_local()).min() == 1
 
 
-@skip_if_complex
 @skip_in_parallel
 def test_interpolation_old(V, W, mesh):
     class F0(UserExpression):
