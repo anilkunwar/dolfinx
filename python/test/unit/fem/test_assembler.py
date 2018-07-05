@@ -14,7 +14,6 @@ from petsc4py import PETSc
 import dolfin
 import ufl
 from ufl import dx, inner
-from dolfin_utils.test import skip_if_complex
 
 
 def xtest_matrix_assembly_block():
