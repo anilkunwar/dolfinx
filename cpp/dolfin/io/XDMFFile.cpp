@@ -2818,7 +2818,7 @@ XDMFFile::get_point_data_values(const function::Function& u)
           _data_values.data(), _data_values.size() / width, width);
 
   Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-      vals = mesh::DistributedMeshTools::reorder_values_by_global_indices(
+      vals = mesh::DistributedMeshTools::reorder_values_by_global_indices<PetscScalar>(
           mesh->mpi_comm(), in_vals, mesh->geometry().global_indices());
   _data_values
       = std::vector<PetscScalar>(vals.data(), vals.data() + vals.size());
