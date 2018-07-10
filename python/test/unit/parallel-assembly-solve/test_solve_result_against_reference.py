@@ -10,8 +10,8 @@ parallel assembly/solve."""
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
 from dolfin import (MPI, TestFunction, TrialFunction, FunctionSpace,
-                    UnitSquareMesh, UnitCubeMesh,
-                    Expression, inner, grad, dx, ds, Function, solve, cpp)
+                    UnitSquareMesh, UnitCubeMesh, Expression,
+                    inner, grad, dx, ds, Function, solve, cpp)
 from dolfin.la import PETScOptions
 from dolfin_utils.test import gc_barrier
 
