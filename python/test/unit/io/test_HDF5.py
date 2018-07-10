@@ -55,6 +55,7 @@ def test_save_and_read_vector(tempdir):
         assert x.norm(dolfin.cpp.la.Norm.l2) == 0.0
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_meshfunction_2D(tempdir):
@@ -83,6 +84,7 @@ def test_save_and_read_meshfunction_2D(tempdir):
                 assert meshfunctions[i][cell] == mf2[cell]
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_meshfunction_3D(tempdir):
@@ -113,6 +115,7 @@ def test_save_and_read_meshfunction_3D(tempdir):
     mf_file.close()
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_mesh_value_collection(tempdir):
@@ -145,6 +148,7 @@ def test_save_and_read_mesh_value_collection(tempdir):
                 assert val == int(ndiv * sum(mid)) + 1
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_mesh_value_collection_with_only_one_marked_entity(tempdir):
@@ -195,6 +199,7 @@ def test_save_and_read_function(tempdir):
     hdf5_file.close()
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_mesh_2D(tempdir):
@@ -216,6 +221,7 @@ def test_save_and_read_mesh_2D(tempdir):
     assert mesh0.num_entities_global(dim) == mesh1.num_entities_global(dim)
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_mesh_3D(tempdir):
@@ -237,6 +243,7 @@ def test_save_and_read_mesh_3D(tempdir):
     assert mesh0.num_entities_global(dim) == mesh1.num_entities_global(dim)
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_mpi_atomicity(tempdir):
