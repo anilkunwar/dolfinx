@@ -35,7 +35,7 @@ def test_complex_assembly():
     bnorm = b0.norm(dolfin.cpp.la.Norm.l1)
     b_norm_ref = abs(-2 + 3.0j)
     A0_norm = A0.norm(dolfin.cpp.la.Norm.frobenius)
-    assert (np.isclose(bnorm, b_norm_ref))
+    assert np.isclose(bnorm, b_norm_ref)
 
     a_imag = j * inner(u, v) * dx
     f = dolfin.Expression("j*sin(2*pi*x[0])", degree=2)
@@ -54,7 +54,7 @@ def test_complex_assembly():
     b2_norm = b1.norm(dolfin.cpp.la.Norm.l2)
     A2_norm = A2.norm(dolfin.cpp.la.Norm.frobenius)
 
-    assert np.isclose(A1_norm, A2_norm/np.sqrt(2))
+    assert np.isclose(A1_norm, A2_norm / np.sqrt(2))
     assert np.isclose(b2_norm, b1_norm)
 
 
@@ -77,7 +77,7 @@ def test_complex_assembly_solve():
     # Variational problem
     u = dolfin.function.argument.TrialFunction(V)
     v = dolfin.function.argument.TestFunction(V)
-    C = dolfin.function.constant.Constant(1+1j)
+    C = dolfin.function.constant.Constant(1 + 1j)
     a = C * inner(grad(u), grad(v)) * dx + \
         C * inner(u, v) * dx
     L = inner(f, v) * dx
