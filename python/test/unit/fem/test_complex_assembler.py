@@ -3,7 +3,7 @@
 # This file is part of DOLFIN (https://www.fenicsproject.org)
 #
 # SPDX-License-Identifier:    LGPL-3.0-or-later
-"""Unit tests for assembly"""
+"""Unit tests for assembly in complex mode"""
 
 import ufl
 import dolfin
