@@ -7,17 +7,18 @@
 
 import ufl
 import dolfin
-from ufl import dx, inner
 import numpy as np
 import pytest
+from ufl import dx, grad, inner
+
+pytestmark = pytest.mark.skipif(not dolfin.has_petsc_complex(),
+                                reason="Only works in complex mode.")
 
 
-@pytest.mark.skipif(not dolfin.has_petsc_complex(),
-                    reason="Only works in complex mode.")
-def test_complex_vector_assembly():
-    """Test assembly of complex scalars"""
+def test_complex_assembly():
+    """Test assembly of complex matrices and vectors"""
 
-    mesh = dolfin.generation.UnitSquareMesh(dolfin.MPI.comm_world, 32, 31)
+    mesh = dolfin.generation.UnitSquareMesh(dolfin.MPI.comm_world, 10, 10)
     P2 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 2)
     V = dolfin.function.functionspace.FunctionSpace(mesh, P2)
 
@@ -52,3 +53,52 @@ def test_complex_vector_assembly():
 
     assert (np.isclose(b2_norm, b1_norm))
     assert (np.isclose(b1_inf, b2_inf))
+
+
+def test_complex_assembly_solve():
+    """
+    Solve a positive definite helmholtz like problem and verify solution
+    with the method of manufactured solutions
+    """
+
+    degree = 3
+    mesh = dolfin.generation.UnitSquareMesh(dolfin.MPI.comm_world, 20, 20)
+    P = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), degree)
+    V = dolfin.function.functionspace.FunctionSpace(mesh, P)
+
+    A = 1 + 2 * (2 * np.pi)**2
+    f = dolfin.Expression("(1.+j)*A*cos(2*pi*x[0])*cos(2*pi*x[1])",
+                          degree=degree, A=A)
+
+    # Variational problem
+    u = dolfin.function.argument.TrialFunction(V)
+    v = dolfin.function.argument.TestFunction(V)
+    C = dolfin.function.constant.Constant(1+1j)
+    a = C * inner(grad(u), grad(v)) * dx + \
+        C * inner(u, v) * dx
+    L = inner(f, v) * dx
+
+    # Create assembler and compute numerical soltion
+    assembler = dolfin.fem.assembling.Assembler(a, L)
+    A, b = assembler.assemble()
+    solver = dolfin.cpp.la.PETScKrylovSolver(mesh.mpi_comm())
+    dolfin.cpp.la.PETScOptions.set("ksp_type", "preonly")
+    dolfin.cpp.la.PETScOptions.set("pc_type", "lu")
+    solver.set_from_options()
+    x = dolfin.cpp.la.PETScVector()
+    solver.set_operator(A)
+    solver.solve(x, b)
+
+    # Reference Solution
+    ex = dolfin.Expression("cos(2*pi*x[0])*cos(2*pi*x[1])",
+                           degree=degree)
+    u_ref = dolfin.interpolate(ex, V)
+
+    xnorm = x.norm(dolfin.cpp.la.Norm.l2)
+    x_ref_norm = u_ref.vector().norm(dolfin.cpp.la.Norm.l2)
+
+    assert np.isclose(xnorm, x_ref_norm)
+
+
+def test_complex_dirichlet_bc():
+    pass
