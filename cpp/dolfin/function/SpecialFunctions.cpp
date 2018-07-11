@@ -18,11 +18,9 @@ MeshCoordinates::MeshCoordinates(std::shared_ptr<const mesh::Mesh> mesh)
   // Do nothing
 }
 //-----------------------------------------------------------------------------
-void MeshCoordinates::eval(
-    Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                            Eigen::RowMajor>>
-        values,
-    Eigen::Ref<const EigenRowArrayXXd> x, const mesh::Cell& cell) const
+void MeshCoordinates::eval(Eigen::Ref<EigenRowArrayXXd> values,
+                           Eigen::Ref<const EigenRowArrayXXd> x,
+                           const mesh::Cell& cell) const
 {
   assert(_mesh);
   assert((unsigned int)x.cols() == _mesh->geometry().dim());
@@ -36,9 +34,7 @@ FacetArea::FacetArea(std::shared_ptr<const mesh::Mesh> mesh)
   // Do nothing
 }
 //-----------------------------------------------------------------------------
-void FacetArea::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
-                                             Eigen::Dynamic, Eigen::RowMajor>>
-                         values,
+void FacetArea::eval(Eigen::Ref<EigenRowArrayXXd> values,
                      Eigen::Ref<const EigenRowArrayXXd> x,
                      const mesh::Cell& cell) const
 {

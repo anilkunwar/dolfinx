@@ -30,9 +30,7 @@ public:
   explicit MeshCoordinates(std::shared_ptr<const mesh::Mesh> mesh);
 
   /// Evaluate function
-  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
+  void eval(Eigen::Ref<EigenRowArrayXXd> values,
             Eigen::Ref<const EigenRowArrayXXd> x, const mesh::Cell& cell) const;
 
 private:
@@ -49,9 +47,7 @@ public:
   explicit FacetArea(std::shared_ptr<const mesh::Mesh> mesh);
 
   /// Evaluate function
-  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                                    Eigen::RowMajor>>
-                values,
+  void eval(Eigen::Ref<EigenRowArrayXXd> values,
             Eigen::Ref<const EigenRowArrayXXd> x, const mesh::Cell& cell) const;
 
 private:
