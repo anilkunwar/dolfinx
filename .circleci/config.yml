@@ -30,7 +30,7 @@ jobs:
           command: cd cpp/doc && doxygen
       - run:
           name: Configure DOLFIN (C++)
-          command: mkdir -p build && cd build && cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer ../cpp/
+          command: mkdir -p build && cd build && cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer ../cpp/ -DDOLFIN_ENABLE_HDF5=0
       - run:
           name: Build DOLFIN and install (C++)
           command: cd build && ninja -j3 install
