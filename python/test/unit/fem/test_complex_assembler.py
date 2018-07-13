@@ -60,7 +60,7 @@ def test_complex_assembly():
 
 def test_complex_assembly_solve():
     """
-    Solve a positive definite helmholtz like problem and verify solution
+    Solve a positive definite helmholtz problem and verify solution
     with the method of manufactured solutions
     """
 
