@@ -49,7 +49,7 @@ jobs:
           name: Build and run C++ demos
           command: |
             cd cpp/demo/documented/poisson
-            python3 -m ffc -u 'scalar_type' 'double complex' -r 'tsfc' Poisson.ufl
+            python3 -m ffc -l dolfin -u 'scalar_type' 'double complex' -r 'tsfc' Poisson.ufl
             cmake -G Ninja .
             ninja
             ./demo_poisson
