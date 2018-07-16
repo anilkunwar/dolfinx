@@ -98,26 +98,11 @@ public:
     ASCII
   };
 
-  /// Field component
-  enum class Component
-  {
-    Real,
-    Imaginary,
-    Both
-  };
-
 /// Default encoding type
 #ifdef HAS_HDF5
   static const Encoding default_encoding = Encoding::HDF5;
 #else
   static const Encoding default_encoding = Encoding::ASCII;
-#endif
-
-/// Default component of the field
-#ifdef PETSC_USE_COMPLEX
-  static const Component default_component = Component::Real;
-#else
-  static const Component default_component = Component::Real;
 #endif
 
   /// Constructor
@@ -187,8 +172,7 @@ public:
   /// @param    encoding (_Encoding_)
   ///         Encoding to use: HDF5 or ASCII
   ///
-  void write(const function::Function& u, Encoding encoding = default_encoding,
-             Component component = default_component);
+  void write(const function::Function& u, Encoding encoding = default_encoding);
 
   /// Save a function::Function with timestamp to XDMF file for visualisation,
   /// using an associated HDF5 file, or storing the data inline as

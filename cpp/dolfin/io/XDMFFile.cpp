@@ -13,6 +13,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
+#include <complex>
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/defines.h>
 #include <dolfin/common/utils.h>
@@ -303,21 +304,13 @@ void XDMFFile::write_checkpoint(const function::Function& u,
 #endif
 }
 //-----------------------------------------------------------------------------
-void XDMFFile::write(const function::Function& u, const Encoding encoding,
-                     const Component component)
+void XDMFFile::write(const function::Function& u, const Encoding encoding)
 {
   // Check that encoding
   if (encoding == Encoding::HDF5 and !has_hdf5())
   {
     throw std::runtime_error("DOLFIN has not been compiled with HDF5 support. "
                              "Cannot write XDMF in HDF5 encoding.");
-  }
-
-  if (component != Component::Real and !has_petsc_complex())
-  {
-    throw std::runtime_error(
-        "DOLFIN has not been compiled with complex support. "
-        "Cannot write the imaginary part of a real-valued function.");
   }
 
   if (encoding == Encoding::ASCII and _mpi_comm.size() != 1)
@@ -378,14 +371,6 @@ void XDMFFile::write(const function::Function& u, const Encoding encoding,
   else
     data_values = get_point_data_values(u);
 
-  // Add attribute node
-  pugi::xml_node attribute_node = grid_node.append_child("Attribute");
-  assert(attribute_node);
-  attribute_node.append_attribute("Name") = u.name().c_str();
-  attribute_node.append_attribute("AttributeType")
-      = rank_to_string(u.value_rank()).c_str();
-  attribute_node.append_attribute("Center") = cell_centred ? "Cell" : "Node";
-
   // Add attribute DataItem node and write data
   std::int64_t width = get_padded_width(u);
   assert(data_values.size() % width == 0);
@@ -396,38 +381,48 @@ void XDMFFile::write(const function::Function& u, const Encoding encoding,
                      : num_points;
 
 #ifdef PETSC_USE_COMPLEX
-  if (component == Component::Real || component == Component::Imaginary)
-  {
-    std::vector<double> component_values(data_values.size());
-    for (unsigned int i = 0; i < data_values.size(); i++)
-    {
-      double value;
-      if (component == Component::Real)
-        value = data_values[i].real();
-      else if (component == Component::Imaginary)
-        value = data_values[i].imag();
-      component_values[i] = value;
-    }
+  std::string real_attr_name = "Real_";
+  real_attr_name.append(u.name());
+  std::string imag_attr_name = "Imaginary_";
+  imag_attr_name.append(u.name());
 
-    add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
-                  "/VisualisationVector/0", component_values,
-                  {num_values, width});
-  }
-  else if (component == Component::Both)
+  // Add real attribute node
+  pugi::xml_node real_attribute_node = grid_node.append_child("Attribute");
+  assert(real_attribute_node);
+  real_attribute_node.append_attribute("Name") = real_attr_name.c_str();
+  real_attribute_node.append_attribute("AttributeType")
+      = rank_to_string(u.value_rank()).c_str();
+  real_attribute_node.append_attribute("Center")
+      = cell_centred ? "Cell" : "Node";
+
+  // Add imaginary attribute node
+  pugi::xml_node imaginary_attribute_node = grid_node.append_child("Attribute");
+  assert(imaginary_attribute_node);
+  imaginary_attribute_node.append_attribute("Name") = imag_attr_name.c_str();
+  imaginary_attribute_node.append_attribute("AttributeType")
+      = rank_to_string(u.value_rank()).c_str();
+  imaginary_attribute_node.append_attribute("Center")
+      = cell_centred ? "Cell" : "Node";
+
+  // Can be avoided by using Eigen?
+  std::vector<double> real_data_values(data_values.size());
+  std::vector<double> imag_data_values(data_values.size());
+
+  for (unsigned int i = 0; i < data_values.size(); i++)
   {
-    std::vector<double> real_values(data_values.size());
-    std::vector<double> imag_values(data_values.size());
-    for (unsigned int i = 0; i < data_values.size(); i++)
-    {
-      real_values[i] = data_values[i].real();
-      imag_values[i] = data_values[i].imag();
-    }
-    add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
-                  "/VisualisationVector/0", real_values, {num_values, width});
-    add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
-                  "/VisualisationVector/1", imag_values, {num_values, width});
+    real_data_values[i] = std::real(data_values[i]);
+    imag_data_values[i] = std::imag(data_values[i]);
   }
 
+  // Add real part
+  add_data_item(_mpi_comm.comm(), real_attribute_node, h5_id,
+                "/VisualisationVector/real/0", real_data_values,
+                {num_values, width});
+
+  // Add imaginary part
+  add_data_item(_mpi_comm.comm(), imaginary_attribute_node, h5_id,
+                "/VisualisationVector/imaginary/0", imag_data_values,
+                {num_values, width});
 #else
   add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
                 "/VisualisationVector/0", data_values, {num_values, width});
