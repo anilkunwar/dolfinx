@@ -81,7 +81,7 @@ void SystemAssembler::check_arity(std::shared_ptr<const Form> a,
     if (L->rank() != 1)
     {
       throw std::runtime_error(
-          "Assemble system. Expected a bilinear form for L");
+          "Assemble system. Expected a linear form for L");
     }
   }
 }

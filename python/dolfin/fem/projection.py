@@ -19,6 +19,7 @@ from dolfin.function.function import Function
 from dolfin.fem.assembling import assemble_system
 from dolfin.function.functionspace import (FunctionSpace, VectorFunctionSpace,
                                            TensorFunctionSpace)
+from dolfin.cpp.la import PETScKrylovSolver, PETScOptions
 
 __all__ = ['project']
 
@@ -93,8 +94,8 @@ def project(v,
     # Define variational problem for projection
     w = TestFunction(V)
     Pv = TrialFunction(V)
-    a = ufl.inner(w, Pv) * dx
-    L = ufl.inner(w, v) * dx
+    a = ufl.inner(Pv, w) * dx
+    L = ufl.inner(v, w) * dx
 
     # Assemble linear system
     A, b = assemble_system(
@@ -103,7 +104,17 @@ def project(v,
     # Solve linear system for projection
     if function is None:
         function = Function(V)
-    cpp.la.solve(A, function.vector(), b, solver_type, preconditioner_type)
+    comm = V.mesh().mpi_comm()
+    solver = PETScKrylovSolver(comm)
+    solver.set_operator(A)
+    PETScOptions.set("ksp_type", "preonly")
+    PETScOptions.set("pc_type", "lu")
+    PETScOptions.set("pc_factor_mat_solver_type", "mumps")
+    solver.set_from_options()
+
+    solver.set_operator(A)
+    solver.solve(function.vector(), b)
+    # cpp.la.solve(A, function.vector(), b, solver_type, preconditioner_type)
 
     return function
 
