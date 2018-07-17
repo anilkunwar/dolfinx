@@ -424,6 +424,15 @@ void XDMFFile::write(const function::Function& u, const Encoding encoding)
                 "/VisualisationVector/imaginary/0", imag_data_values,
                 {num_values, width});
 #else
+  // Add attribute node
+  pugi::xml_node attribute_node = grid_node.append_child("Attribute");
+  assert(attribute_node);
+  attribute_node.append_attribute("Name") = u.name().c_str();
+  attribute_node.append_attribute("AttributeType")
+      = rank_to_string(u.value_rank()).c_str();
+  attribute_node.append_attribute("Center") = cell_centred ? "Cell" : "Node";
+
+
   add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
                 "/VisualisationVector/0", data_values, {num_values, width});
 #endif
@@ -2820,7 +2829,7 @@ XDMFFile::get_point_data_values(const function::Function& u)
   return _data_values;
 }
 //-----------------------------------------------------------------------------
-std::vector<double> XDMFFile::get_p2_data_values(const function::Function& u)
+std::vector<PetscScalar> XDMFFile::get_p2_data_values(const function::Function& u)
 {
   const auto mesh = u.function_space()->mesh();
 
@@ -2829,7 +2838,7 @@ std::vector<double> XDMFFile::get_p2_data_values(const function::Function& u)
   const std::size_t num_local_points
       = mesh->num_entities(0) + mesh->num_entities(1);
   const std::size_t width = get_padded_width(u);
-  std::vector<double> data_values(width * num_local_points);
+  std::vector<PetscScalar> data_values(width * num_local_points);
   std::vector<dolfin::la_index_t> data_dofs(data_values.size(), 0);
 
   assert(u.function_space()->dofmap());
@@ -2856,12 +2865,7 @@ std::vector<double> XDMFFile::get_p2_data_values(const function::Function& u)
 
     // Get the values at the vertex points
     const la::PETScVector& uvec = *u.vector();
-#ifndef PETSC_USE_COMPLEX
     uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
-#else
-    std::vector<PetscScalar> data_values(width * num_local_points);
-    uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
-#endif
 
     // Get midpoint values for  mesh::Edge points
     for (auto& e : mesh::MeshRange<mesh::Edge>(*mesh))
@@ -2900,12 +2904,7 @@ std::vector<double> XDMFFile::get_p2_data_values(const function::Function& u)
     }
 
     const la::PETScVector& uvec = *u.vector();
-#ifndef PETSC_USE_COMPLEX
     uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
-#else
-    std::vector<PetscScalar> data_values(width * num_local_points);
-    uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
-#endif
   }
   else
   {

@@ -542,7 +542,7 @@ private:
 
   // Get point data values collocated at P2 geometry points (vertices
   // and edges) flattened as a 2D array
-  static std::vector<double> get_p2_data_values(const function::Function& u);
+  static std::vector<PetscScalar> get_p2_data_values(const function::Function& u);
 
   // Get cell data values as a flattened 2D array
   static std::vector<PetscScalar>
