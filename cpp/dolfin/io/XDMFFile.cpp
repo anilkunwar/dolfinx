@@ -631,10 +631,10 @@ void XDMFFile::write(const function::Function& u, double time_step,
   }
 
   add_data_item(_mpi_comm.comm(), real_attribute_node, h5_id, real_dataset_name,
-                data_values, {num_values, width});
+                real_data_values, {num_values, width});
   
   add_data_item(_mpi_comm.comm(), imag_attribute_node, h5_id, imag_dataset_name,
-              data_values, {num_values, width});
+              imag_data_values, {num_values, width});
 
 #else
   // Add attribute node
@@ -1448,8 +1448,26 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   std::vector<PetscScalar> local_data;
   u_vector.get_local(local_data);
 
+#ifdef PETSC_USE_COMPLEX
+  std::vector<double> real_local_data(local_data.size());
+  std::vector<double> imag_local_data(local_data.size());
+
+  for (unsigned int i = 0; i < local_data.size(); i++)
+  {
+    real_local_data[i] = std::real(local_data[i]);
+    imag_local_data[i] = std::imag(local_data[i]);
+  }
+  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector/real",
+              real_local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
+
+  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector/imag",
+                imag_local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
+
+#else
   add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector",
-                local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
+              local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
+
+#endif
 
   if (MPI::rank(mpi_comm) == MPI::size(mpi_comm) - 1)
     x_cell_dofs.push_back(num_cell_dofs_global);

@@ -26,7 +26,6 @@ def test_read_write_p2_mesh(tempdir):
     assert mesh2.num_entities_global(0) == mesh.num_entities_global(0)
 
 
-@xfail_if_complex
 def test_read_write_p2_function(tempdir):
     mesh = cpp.generation.UnitDiscMesh.create(MPI.comm_world, 3,
                                               cpp.mesh.GhostMode.none)
