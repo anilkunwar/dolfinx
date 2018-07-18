@@ -219,80 +219,68 @@ void XDMFFile::write_checkpoint(const function::Function& u,
     h5_id = _hdf5_file->h5_id();
   }
 #endif
-#ifdef PETSC_USE_COMPLEX
-  std::vector<std::string> components = {"real_", "imag_"};
-#else
-  std::vector<std::string> components
-      = { "" }
-#endif
-  for (auto component : components)
+  // From this point _xml_doc points to a valid XDMF XML document
+  // with expected structure
+
+  // Find temporal grid with name equal to the name of function we're about
+  // to save
+  pugi::xml_node func_temporal_grid_node
+      = _xml_doc
+            ->select_node(("/Xdmf/Domain/Grid[@CollectionType='Temporal' and "
+                           "@Name='"
+                           + function_name + "']")
+                              .c_str())
+            .node();
+
+  // If there is no such temporal grid then create one
+  if (func_temporal_grid_node.empty())
   {
-    // From this point _xml_doc points to a valid XDMF XML document
-    // with expected structure
-
-    // Find temporal grid with name equal to the name of function we're about
-    // to save
-
-    std::string component_function_name = component + function_name;
-    pugi::xml_node func_temporal_grid_node
-        = _xml_doc
-              ->select_node(("/Xdmf/Domain/Grid[@CollectionType='Temporal' and "
-                             "@Name='"
-                             + component_function_name + "']")
-                                .c_str())
-              .node();
-
-    // If there is no such temporal grid then create one
-    if (func_temporal_grid_node.empty())
-    {
-      func_temporal_grid_node
-          = _xml_doc->select_node("/Xdmf/Domain").node().append_child("Grid");
-      func_temporal_grid_node.append_attribute("GridType") = "Collection";
-      func_temporal_grid_node.append_attribute("CollectionType") = "Temporal";
-      func_temporal_grid_node.append_attribute("Name")
-          = component_function_name.c_str();
-    }
-    else
-    {
-      log::log(PROGRESS,
-               "XDMF time series for function \"%s\" not empty. Appending.",
-               component_function_name.c_str());
-    }
-
-    //
-    // Write mesh
-    //
-
-    std::size_t counter = func_temporal_grid_node.select_nodes("Grid").size();
-    std::string function_time_name
-        = component_function_name + "_" + std::to_string(counter);
-
-    const mesh::Mesh& mesh = *u.function_space()->mesh();
-    add_mesh(_mpi_comm.comm(), func_temporal_grid_node, h5_id, mesh,
-             component_function_name + "/" + function_time_name);
-
-    // Get newly (by add_mesh) created Grid
-    pugi::xml_node mesh_grid_node
-        = func_temporal_grid_node
-              .select_node(("Grid[@Name='" + mesh.name() + "']").c_str())
-              .node();
-    assert(mesh_grid_node);
-
-    // Change it's name to {function_name}_{counter}
-    // where counter = number of children in temporal grid node
-    mesh_grid_node.attribute("Name") = function_time_name.c_str();
-
-    pugi::xml_node time_node = mesh_grid_node.append_child("Time");
-    time_node.append_attribute("Value") = std::to_string(time_step).c_str();
-
-    //
-    // Write function
-    //
-
-    add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
-                 component_function_name + "/" + function_time_name, u,
-                 component_function_name, mesh);
+    func_temporal_grid_node
+        = _xml_doc->select_node("/Xdmf/Domain").node().append_child("Grid");
+    func_temporal_grid_node.append_attribute("GridType") = "Collection";
+    func_temporal_grid_node.append_attribute("CollectionType") = "Temporal";
+    func_temporal_grid_node.append_attribute("Name") = function_name.c_str();
   }
+  else
+  {
+    log::log(PROGRESS,
+             "XDMF time series for function \"%s\" not empty. Appending.",
+             function_name.c_str());
+  }
+
+  //
+  // Write mesh
+  //
+
+  std::size_t counter = func_temporal_grid_node.select_nodes("Grid").size();
+  std::string function_time_name
+      = function_name + "_" + std::to_string(counter);
+
+  const mesh::Mesh& mesh = *u.function_space()->mesh();
+  add_mesh(_mpi_comm.comm(), func_temporal_grid_node, h5_id, mesh,
+           function_name + "/" + function_time_name);
+
+  // Get newly (by add_mesh) created Grid
+  pugi::xml_node mesh_grid_node
+      = func_temporal_grid_node
+            .select_node(("Grid[@Name='" + mesh.name() + "']").c_str())
+            .node();
+  assert(mesh_grid_node);
+
+  // Change it's name to {function_name}_{counter}
+  // where counter = number of children in temporal grid node
+  mesh_grid_node.attribute("Name") = function_time_name.c_str();
+
+  pugi::xml_node time_node = mesh_grid_node.append_child("Time");
+  time_node.append_attribute("Value") = std::to_string(time_step).c_str();
+
+  //
+  // Write function
+  //
+
+  add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
+               function_name + "/" + function_time_name, u, function_name,
+               mesh);
 
   // Save XML file (on process 0 only)
   if (_mpi_comm.rank() == 0)
@@ -1433,27 +1421,8 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   std::vector<PetscScalar> local_data;
   u_vector.get_local(local_data);
 
-#ifdef PETSC_USE_COMPLEX
-
-  std::vector<double> component_local_data(local_data.size());
-  
-  for (unsigned int i = 0; i < local_data.size(); i++)
-  {
-    if (function_name.find("real") != std::string::npos)
-      component_local_data[i] = std::real(local_data[i]);
-    else if (function_name.find("imag") != std::string::npos)
-      component_local_data[i] = std::imag(local_data[i]);
-  }
-
-  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector",
-                component_local_data, {(std::int64_t)u_vector.size(), 1},
-                "Float");
-
-#else
   add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector",
                 local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
-
-#endif
 
   if (MPI::rank(mpi_comm) == MPI::size(mpi_comm) - 1)
     x_cell_dofs.push_back(num_cell_dofs_global);
