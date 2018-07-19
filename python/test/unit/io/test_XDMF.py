@@ -14,6 +14,7 @@ from dolfin import (XDMFFile, MPI, MeshValueCollection, MeshEntities, Vertices, 
 from dolfin_utils.test import tempdir
 assert(tempdir)
 
+
 # Supported XDMF file encoding
 encodings = (XDMFFile.Encoding.HDF5, XDMFFile.Encoding.ASCII)
 
@@ -30,9 +31,18 @@ fe_degrees = [0, 1, 3]
 mesh_tdims = [1, 2, 3]
 mesh_ns = [4, 7]
 
+
+def read_checkpoint(self, V, name, counter=-1):
+    import dolfin
+    # Read cpp function
+    u_cpp = self._read_checkpoint(V._cpp_object, name, counter)
+    return dolfin.function.function.Function(V, u_cpp.vector())
+
+
+XDMFFile.read_checkpoint = read_checkpoint
+
+
 # Meshes tested
-
-
 def mesh_factory(tdim, n):
     if tdim == 1:
         return UnitIntervalMesh(MPI.comm_world, n)

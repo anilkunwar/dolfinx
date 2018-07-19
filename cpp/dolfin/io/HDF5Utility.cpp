@@ -345,7 +345,7 @@ void HDF5Utility::set_local_vector_values(
     MPI::all_to_all(mpi_comm, send_indices, receive_indices);
   }
 
-  std::vector<double> vector_values(vector_range[1] - vector_range[0]);
+  std::vector<PetscScalar> vector_values(vector_range[1] - vector_range[0]);
   for (std::size_t i = 0; i != num_processes; ++i)
   {
     const std::vector<double>& rval = receive_values[i];
@@ -358,9 +358,7 @@ void HDF5Utility::set_local_vector_values(
       vector_values[rindex[j] - vector_range[0]] = rval[j];
     }
   }
-#ifndef PETSC_USE_COMPLEX
   x.set_local(vector_values);
-#endif
   x.apply();
 }
 //-----------------------------------------------------------------------------

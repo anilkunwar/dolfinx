@@ -83,7 +83,7 @@ from .generation import UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh
 # experimental
 from .jit.pybind11jit import compile_cpp_code
 
-from .la import la_index_dtype
+#from .la import la_index_dtype
 from .mesh import MeshFunction
 from .mesh import MeshValueCollection
 
