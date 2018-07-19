@@ -24,31 +24,13 @@ with HYPRE, and petsc4py must be available.
 
 # Copyright (C) 2009-2015 Bartosz Sawicki and Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# Modified by Anders Logg 2011
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 from dolfin import *
 import matplotlib.pyplot as plt
 
-
-# Check that DOLFIN has been configured with PETSc
-if not has_petsc():
-    print("This demo requires DOLFIN to be configured with PETSc.")
-    exit()
 
 # Check that PETSc has been configured with HYPRE
 if not "hypre_amg" in PETScPreconditioner.preconditioners():
@@ -66,9 +48,6 @@ try:
 except AttributeError:
     print("This demo requires a recent petsc4py with HYPRE bindings.")
     exit()
-
-# Set PETSc as default linear algebra backend
-parameters["linear_algebra_backend"] = "PETSc";
 
 # Load sphere mesh
 mesh = Mesh("../sphere.xml.gz")

@@ -14,8 +14,7 @@ using namespace dolfin::mesh;
 //-----------------------------------------------------------------------------
 double Face::area() const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(_mesh->ordered());
+  assert(_mesh);
 
   const std::size_t D = _mesh->topology().dim();
 
@@ -46,8 +45,7 @@ double Face::area() const
 //-----------------------------------------------------------------------------
 geometry::Point Face::normal() const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(_mesh->ordered());
+  assert(_mesh);
 
   const std::size_t tD = _mesh->topology().dim();
   const std::size_t gD = _mesh->geometry().dim();
@@ -56,9 +54,8 @@ geometry::Point Face::normal() const
   // in R^2
   if (tD == 2 && gD == 2)
   {
-    log::dolfin_error("Face.cpp", "compute Face normal",
-                 "Don't know how to compute Face normal for a Face in a 2D "
-                 "mesh embedded in R^2.");
+    throw std::runtime_error("Don't know how to compute Face normal for a Face "
+                             "in a 2D mesh embedded in R^2.");
   }
 
   // Check for when Cell has the same topological dimension as Face and we are

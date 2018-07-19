@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <petscsys.h>
 #include <unordered_map>
 #include <vector>
 
@@ -163,12 +164,6 @@ public:
   ///         True if V is contained or equal to this.
   bool contains(const FunctionSpace& V) const;
 
-  /// Collapse a subspace and return a new function space
-  ///
-  /// @returns    _FunctionSpace_
-  ///         The new function space.
-  std::shared_ptr<FunctionSpace> collapse() const;
-
   /// Collapse a subspace and return a new function space and a map
   /// from new to old dofs
   ///
@@ -177,8 +172,9 @@ public:
   ///
   /// @returns    _FunctionSpace_
   ///       The new function space.
-  std::shared_ptr<FunctionSpace>
-  collapse(std::unordered_map<std::size_t, std::size_t>& collapsed_dofs) const;
+  std::pair<std::shared_ptr<FunctionSpace>,
+            std::unordered_map<std::size_t, std::size_t>>
+  collapse() const;
 
   /// Check if function space has given cell
   ///
@@ -216,9 +212,9 @@ public:
   /// spatial coordinates of dofs, for example for re-partitioning or
   /// nullspace computations.
   ///
-  /// @returns    std::vector<double>
-  ///         The dof coordinates (x0, y0, x1, y1, . . .)
-  std::vector<double> tabulate_dof_coordinates() const;
+  /// @returns    EigenRowArrayXXd
+  ///         The dof coordinates [([0, y0], [x1, y1], . . .)
+  EigenRowArrayXXd tabulate_dof_coordinates() const;
 
   /// Set dof entries in vector to value*x[i], where [x][i] is the
   /// coordinate of the dof spatial coordinate. Parallel layout of
@@ -232,7 +228,8 @@ public:
   ///         The value to multiply to coordinate by.
   /// @param component (std::size_t)
   ///         The coordinate index.
-  void set_x(la::PETScVector& x, double value, std::size_t component) const;
+  void set_x(la::PETScVector& x, PetscScalar value,
+             std::size_t component) const;
 
   /// Return informal string representation (pretty-print)
   ///
@@ -270,5 +267,5 @@ private:
   mutable std::map<std::vector<std::size_t>, std::weak_ptr<FunctionSpace>>
       _subspaces;
 };
-}
-}
+} // namespace function
+} // namespace dolfin

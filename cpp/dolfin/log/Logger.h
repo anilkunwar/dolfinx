@@ -90,20 +90,16 @@ public:
   void register_timing(std::string task,
                        std::tuple<double, double, double> elapsed);
 
-  /// Return a summary of timings and tasks in a Table, optionally
-  /// clearing stored timings
-  Table timings(TimingClear clear, std::set<TimingType> type);
+  /// Return a summary of timings and tasks in a Table
+  Table timings(std::set<TimingType> type);
 
-  /// List a summary of timings and tasks, optionally clearing
-  /// stored timings.  ``MPI_AVG`` reduction is printed. Collective
-  /// on ``Logger::mpi_comm()``.
-  void list_timings(TimingClear clear, std::set<TimingType> type);
+  /// List a summary of timings and tasks.
+  /// ``MPI_AVG`` reduction is printed. Collective on ``Logger::mpi_comm()``.
+  void list_timings(std::set<TimingType> type);
 
   /// Return timing (count, total wall time, total user time, total
-  /// system time) for given task, optionally clearing all timings
-  /// for the task
-  std::tuple<std::size_t, double, double, double> timing(std::string task,
-                                                         TimingClear clear);
+  /// system time) for given task.
+  std::tuple<std::size_t, double, double, double> timing(std::string task);
 
   /// Monitor memory usage. Call this function at the start of a
   /// program to continuously monitor the memory usage of the
@@ -118,10 +114,6 @@ public:
 
   /// Helper function for dolfin_debug macro
   void __debug(std::string msg) const;
-
-  /// Helper function for dolfin_dolfin_assert macro
-  void __dolfin_assert(std::string file, unsigned long line,
-                       std::string function, std::string check) const;
 
 private:
   // Write message

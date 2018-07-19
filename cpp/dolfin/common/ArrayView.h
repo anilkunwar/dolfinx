@@ -7,12 +7,14 @@
 #pragma once
 
 #include <cstddef>
-#include <dolfin/log/log.h>
+#include <cassert>
 
 namespace dolfin
 {
 namespace common
 {
+
+// FIXME: To be removed
 
 /// This class provides a wrapper for a pointer to an array. It
 /// never owns the data, and will not be valid if the underlying
@@ -65,14 +67,14 @@ public:
   /// Access value of given entry (const version)
   const T& operator[](std::size_t i) const
   {
-    dolfin_assert(i < _size);
+    assert(i < _size);
     return _x[i];
   }
 
   /// Access value of given entry (non-const version)
   T& operator[](std::size_t i)
   {
-    dolfin_assert(i < _size);
+    assert(i < _size);
     return _x[i];
   }
 

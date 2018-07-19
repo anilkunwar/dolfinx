@@ -1,6 +1,7 @@
 set(HEADERS
   Assembler.h
   AssemblerBase.h
+  CoordinateMapping.h
   DirichletBC.h
   DiscreteOperators.h
   DofMapBuilder.h
@@ -15,7 +16,6 @@ set(HEADERS
   LocalAssembler.h
   NonlinearVariationalProblem.h
   PETScDMCollection.h
-  PointSource.h
   SparsityPatternBuilder.h
   SystemAssembler.h
   UFC.h
@@ -31,10 +31,11 @@ set(SOURCES
   utils.cpp
   FiniteElement.cpp
   Form.cpp
+  FormCoefficients.cpp
+  FormIntegrals.cpp
   GenericDofMap.cpp
   LocalAssembler.cpp
   NonlinearVariationalProblem.cpp
-  PointSource.cpp
   PETScDMCollection.cpp
   SparsityPatternBuilder.cpp
   SystemAssembler.cpp

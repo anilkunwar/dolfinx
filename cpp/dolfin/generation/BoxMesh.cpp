@@ -16,22 +16,38 @@ using namespace dolfin;
 using namespace dolfin::generation;
 
 //-----------------------------------------------------------------------------
+mesh::Mesh BoxMesh::create(MPI_Comm comm,
+                           const std::array<geometry::Point, 2>& p,
+                           std::array<std::size_t, 3> n,
+                           mesh::CellType::Type cell_type,
+                           const mesh::GhostMode ghost_mode)
+{
+  if (cell_type == mesh::CellType::Type::tetrahedron)
+    return build_tet(comm, p, n, ghost_mode);
+  else if (cell_type == mesh::CellType::Type::hexahedron)
+    return build_hex(comm, n, ghost_mode);
+  else
+    throw std::runtime_error("Generate rectangle mesh. Wrong cell type");
+
+  // Will never reach this point
+  return build_tet(comm, p, n, ghost_mode);
+}
+//-----------------------------------------------------------------------------
 mesh::Mesh BoxMesh::build_tet(MPI_Comm comm,
                               const std::array<geometry::Point, 2>& p,
-                              std::array<std::size_t, 3> n)
+                              std::array<std::size_t, 3> n,
+                              const mesh::GhostMode ghost_mode)
 {
   common::Timer timer("Build BoxMesh");
 
   // Receive mesh if not rank 0
   if (dolfin::MPI::rank(comm) != 0)
   {
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> geom(
-        0, 3);
-    Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> topo(0,
-                                                                             4);
-    mesh::Mesh mesh(comm, mesh::CellType::Type::tetrahedron, geom, topo);
-    mesh.order();
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
+    EigenRowArrayXXd geom(0, 3);
+    EigenRowArrayXXi64 topo(0, 4);
+
+    return mesh::MeshPartitioning::build_distributed_mesh(
+        comm, mesh::CellType::Type::tetrahedron, geom, topo, {}, ghost_mode);
   }
 
   // Extract data
@@ -62,25 +78,18 @@ mesh::Mesh BoxMesh::build_tet(MPI_Comm comm,
   if (std::abs(x0 - x1) < DOLFIN_EPS || std::abs(y0 - y1) < DOLFIN_EPS
       || std::abs(z0 - z1) < DOLFIN_EPS)
   {
-    log::dolfin_error("BoxMesh.cpp", "create box",
-                      "Box seems to have zero width, "
-                      "height or depth. Consider "
-                      "checking your dimensions");
+    throw std::runtime_error(
+        "Box seems to have zero width, height or depth. Check dimensions");
   }
 
   if (nx < 1 || ny < 1 || nz < 1)
   {
-    log::dolfin_error("BoxMesh.cpp", "create box",
-                      "BoxMesh has non-positive number "
-                      "of vertices in some dimension: "
-                      "number of vertices must be at "
-                      "least 1 in each dimension");
+    throw std::runtime_error(
+        "BoxMesh has non-positive number of vertices in some dimension");
   }
 
-  Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> geom(
-      (nx + 1) * (ny + 1) * (nz + 1), 3);
-  Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> topo(
-      6 * nx * ny * nz, 4);
+  EigenRowArrayXXd geom((nx + 1) * (ny + 1) * (nz + 1), 3);
+  EigenRowArrayXXi64 topo(6 * nx * ny * nz, 4);
 
   std::size_t vertex = 0;
   for (std::size_t iz = 0; iz <= nz; ++iz)
@@ -132,25 +141,21 @@ mesh::Mesh BoxMesh::build_tet(MPI_Comm comm,
     }
   }
 
-  mesh::Mesh mesh(comm, mesh::CellType::Type::tetrahedron, geom, topo);
-  mesh.order();
-
-  if (dolfin::MPI::size(comm) > 1)
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
-  else
-    return mesh;
+  return mesh::MeshPartitioning::build_distributed_mesh(
+      comm, mesh::CellType::Type::tetrahedron, geom, topo, {}, ghost_mode);
 }
 //-----------------------------------------------------------------------------
-mesh::Mesh BoxMesh::build_hex(MPI_Comm comm, std::array<std::size_t, 3> n)
+mesh::Mesh BoxMesh::build_hex(MPI_Comm comm, std::array<std::size_t, 3> n,
+                              const mesh::GhostMode ghost_mode)
 {
   // Receive mesh if not rank 0
   if (dolfin::MPI::rank(comm) != 0)
   {
     EigenRowArrayXXd geom(0, 3);
-    EigenRowArrayXXi32 topo(0, 8);
+    EigenRowArrayXXi64 topo(0, 8);
 
-    mesh::Mesh mesh(comm, mesh::CellType::Type::hexahedron, geom, topo);
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
+    return mesh::MeshPartitioning::build_distributed_mesh(
+        comm, mesh::CellType::Type::hexahedron, geom, topo, {}, ghost_mode);
   }
 
   const std::size_t nx = n[0];
@@ -158,7 +163,7 @@ mesh::Mesh BoxMesh::build_hex(MPI_Comm comm, std::array<std::size_t, 3> n)
   const std::size_t nz = n[2];
 
   EigenRowArrayXXd geom((nx + 1) * (ny + 1) * (nz + 1), 3);
-  EigenRowArrayXXi32 topo(nx * ny * nz, 8);
+  EigenRowArrayXXi64 topo(nx * ny * nz, 8);
 
   const double a = 0.0;
   const double b = 1.0;
@@ -179,8 +184,9 @@ mesh::Mesh BoxMesh::build_hex(MPI_Comm comm, std::array<std::size_t, 3> n)
           = c + ((static_cast<double>(iy)) * (d - c) / static_cast<double>(ny));
       for (std::size_t ix = 0; ix <= nx; ix++)
       {
-        const double x = a + ((static_cast<double>(ix)) * (b - a)
-                              / static_cast<double>(nx));
+        const double x
+            = a
+              + ((static_cast<double>(ix)) * (b - a) / static_cast<double>(nx));
         geom.row(vertex) << x, y, z;
         ++vertex;
       }
@@ -209,11 +215,7 @@ mesh::Mesh BoxMesh::build_hex(MPI_Comm comm, std::array<std::size_t, 3> n)
     }
   }
 
-  mesh::Mesh mesh(comm, mesh::CellType::Type::hexahedron, geom, topo);
-
-  if (dolfin::MPI::size(comm) > 1)
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
-  else
-    return mesh;
+  return mesh::MeshPartitioning::build_distributed_mesh(
+      comm, mesh::CellType::Type::hexahedron, geom, topo, {}, ghost_mode);
 }
 //-----------------------------------------------------------------------------

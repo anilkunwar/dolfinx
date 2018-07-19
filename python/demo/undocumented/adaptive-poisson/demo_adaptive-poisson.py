@@ -14,22 +14,9 @@ edge (jump) terms and the size of the interpolation constant.
 
 # Copyright (C) 2008 Rolv Erlend Bredesen
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# Modified by Anders Logg 2008-2011
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 
 from dolfin import *
@@ -81,7 +68,7 @@ for level in range(MAX_ITER):
         break
 
     # Mark cells for refinement
-    cell_markers = MeshFunction("bool", mesh, mesh.topology().dim())
+    cell_markers = MeshFunction("bool", mesh, mesh.topology.dim)
     gamma_0 = sorted(gamma, reverse=True)[int(len(gamma)*REFINE_RATIO)]
     gamma_0 = MPI.max(mesh.mpi_comm(), gamma_0)
     for c in cells(mesh):

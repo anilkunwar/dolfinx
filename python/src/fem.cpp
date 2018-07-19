@@ -14,12 +14,16 @@
 #include <pybind11/pytypes.h>
 #include <pybind11/stl.h>
 
+#include <string>
+
 #ifdef HAS_PYBIND11_PETSC4PY
 #include <petsc4py/petsc4py.h>
 #endif
 
 #include "casters.h"
+#include <dolfin/common/types.h>
 #include <dolfin/fem/Assembler.h>
+#include <dolfin/fem/CoordinateMapping.h>
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/DiscreteOperators.h>
 #include <dolfin/fem/DofMap.h>
@@ -27,7 +31,6 @@
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/NonlinearVariationalProblem.h>
 #include <dolfin/fem/PETScDMCollection.h>
-#include <dolfin/fem/PointSource.h>
 #include <dolfin/fem/SparsityPatternBuilder.h>
 #include <dolfin/fem/SystemAssembler.h>
 #include <dolfin/fem/utils.h>
@@ -43,88 +46,84 @@
 
 namespace py = pybind11;
 
-namespace dolfin_wrappers {
-void fem(py::module &m) {
+namespace dolfin_wrappers
+{
+void fem(py::module& m)
+{
   // UFC objects
-  py::class_<ufc::finite_element, std::shared_ptr<ufc::finite_element>>(
+  py::class_<ufc_finite_element, std::shared_ptr<ufc_finite_element>>(
       m, "ufc_finite_element", "UFC finite element object");
-  py::class_<ufc::dofmap, std::shared_ptr<ufc::dofmap>>(m, "ufc_dofmap",
-                                                        "UFC dofmap object");
-  py::class_<ufc::form, std::shared_ptr<ufc::form>>(m, "ufc_form",
-                                                    "UFC form object");
+  py::class_<ufc_dofmap, std::shared_ptr<ufc_dofmap>>(m, "ufc_dofmap",
+                                                      "UFC dofmap object");
+  py::class_<ufc_form, std::shared_ptr<ufc_form>>(m, "ufc_form",
+                                                  "UFC form object");
+  py::class_<ufc_coordinate_mapping, std::shared_ptr<ufc_coordinate_mapping>>(
+      m, "ufc_coordinate_mapping", "UFC coordinate_mapping object");
 
   // Function to convert pointers (from JIT usually) to UFC objects
-  m.def("make_ufc_finite_element", [](std::uintptr_t e) {
-    ufc::finite_element *p = reinterpret_cast<ufc::finite_element *>(e);
-    return std::shared_ptr<const ufc::finite_element>(p);
-  });
+  m.def("make_ufc_finite_element",
+        [](std::uintptr_t e) {
+          ufc_finite_element* p = reinterpret_cast<ufc_finite_element*>(e);
+          return std::shared_ptr<const ufc_finite_element>(p);
+        },
+        "Create a ufc_finite_element object from a pointer.");
 
-  m.def("make_ufc_dofmap", [](std::uintptr_t e) {
-    ufc::dofmap *p = reinterpret_cast<ufc::dofmap *>(e);
-    return std::shared_ptr<const ufc::dofmap>(p);
-  });
+  m.def("make_ufc_dofmap",
+        [](std::uintptr_t e) {
+          ufc_dofmap* p = reinterpret_cast<ufc_dofmap*>(e);
+          return std::shared_ptr<const ufc_dofmap>(p);
+        },
+        "Create a ufc_dofmap object from a pointer.");
 
-  m.def("make_ufc_form", [](std::uintptr_t e) {
-    ufc::form *p = reinterpret_cast<ufc::form *>(e);
-    return std::shared_ptr<const ufc::form>(p);
-  });
+  m.def("make_ufc_form",
+        [](std::uintptr_t e) {
+          ufc_form* p = reinterpret_cast<ufc_form*>(e);
+          return std::shared_ptr<const ufc_form>(p);
+        },
+        "Create a ufc_form object from a pointer.");
+
+  m.def("make_ufc_coordinate_mapping",
+        [](std::uintptr_t e) {
+          ufc_coordinate_mapping* p
+              = reinterpret_cast<ufc_coordinate_mapping*>(e);
+          return std::shared_ptr<const ufc_coordinate_mapping>(p);
+        },
+        "Create a ufc_coordinate_mapping object from a pointer.");
 
   // dolfin::fem::FiniteElement
   py::class_<dolfin::fem::FiniteElement,
              std::shared_ptr<dolfin::fem::FiniteElement>>(
       m, "FiniteElement", "DOLFIN FiniteElement object")
-      .def(py::init<std::shared_ptr<const ufc::finite_element>>())
+      .def(py::init<std::shared_ptr<const ufc_finite_element>>())
       .def("num_sub_elements", &dolfin::fem::FiniteElement::num_sub_elements)
-      .def("tabulate_dof_coordinates",
-           [](const dolfin::fem::FiniteElement &self,
-              const dolfin::mesh::Cell &cell) {
-             // Get cell vertex coordinates
-             std::vector<double> coordinate_dofs;
-             cell.get_coordinate_dofs(coordinate_dofs);
+      .def("dof_reference_coordinates",
+           &dolfin::fem::FiniteElement::dof_reference_coordinates)
+      // TODO: Update for change to Eigen::Tensor
+      //   .def("tabulate_dof_coordinates",
+      //        [](const dolfin::fem::FiniteElement &self,
+      //           const dolfin::mesh::Cell &cell) {
+      //          // Get cell vertex coordinates
+      //          std::vector<double> coordinate_dofs;
+      //          cell.get_coordinate_dofs(coordinate_dofs);
 
-             // Tabulate the coordinates
-             boost::multi_array<double, 2> _dof_coords;
-             self.tabulate_dof_coordinates(_dof_coords, coordinate_dofs, cell);
+      //          // Tabulate the coordinates
+      //          boost::multi_array<double, 2> _dof_coords;
+      //          self.tabulate_dof_coordinates(_dof_coords, coordinate_dofs,
+      //          cell);
 
-             // Copy data and return
-             typedef Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
-                                  Eigen::RowMajor>
-                 EigenArray;
-             EigenArray dof_coords = Eigen::Map<EigenArray>(
-                 _dof_coords.data(), _dof_coords.shape()[0],
-                 _dof_coords.shape()[1]);
-             return dof_coords;
-           },
-           "Tabulate coordinates of dofs on cell")
-      .def("evaluate_basis",
-           [](const dolfin::fem::FiniteElement &self, int i,
-              const py::array_t<double> x,
-              const py::array_t<double> coordinate_dofs, int cell_orientation) {
-             auto ufc_element = self.ufc_element();
-             const std::size_t size = ufc_element->value_size();
-             py::array_t<double, py::array::c_style> values(size);
-             self.evaluate_basis(i, values.mutable_data(), x.data(),
-                                 coordinate_dofs.data(), cell_orientation);
-             return values;
-           })
-      .def("evaluate_basis_derivatives",
-           [](const dolfin::fem::FiniteElement &self, int i, int order,
-              const py::array_t<double> x,
-              const py::array_t<double> coordinate_dofs, int cell_orientation) {
-             auto ufc_element = self.ufc_element();
-
-             const std::size_t gdim = self.geometric_dimension();
-             const std::size_t num_derivs = pow(gdim, order);
-             const std::size_t size = ufc_element->value_size() * num_derivs;
-             py::array_t<double, py::array::c_style> values(size);
-             self.evaluate_basis_derivatives(i, order, values.mutable_data(),
-                                             x.data(), coordinate_dofs.data(),
-                                             cell_orientation);
-             return values;
-           })
+      //          // Copy data and return
+      //          typedef Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+      //                               Eigen::RowMajor>
+      //              EigenArray;
+      //          EigenArray dof_coords = Eigen::Map<EigenArray>(
+      //              _dof_coords.data(), _dof_coords.shape()[0],
+      //              _dof_coords.shape()[1]);
+      //          return dof_coords;
+      //        },
+      //        "Tabulate coordinates of dofs on cell")
       .def("space_dimension", &dolfin::fem::FiniteElement::space_dimension)
-      .def("geometric_dimension",
-           &dolfin::fem::FiniteElement::geometric_dimension)
+      .def("topological_dimension",
+           &dolfin::fem::FiniteElement::topological_dimension)
       .def("value_dimension", &dolfin::fem::FiniteElement::value_dimension)
       .def("signature", &dolfin::fem::FiniteElement::signature);
 
@@ -137,72 +136,81 @@ void fem(py::module &m) {
            "The dimension of the global finite element function space")
       .def("index_map", &dolfin::fem::GenericDofMap::index_map)
       .def("neighbours", &dolfin::fem::GenericDofMap::neighbours)
-      .def("off_process_owner", &dolfin::fem::GenericDofMap::off_process_owner)
       .def("shared_nodes", &dolfin::fem::GenericDofMap::shared_nodes)
       .def("cell_dofs", &dolfin::fem::GenericDofMap::cell_dofs)
       .def("dofs", (std::vector<dolfin::la_index_t>(
-                       dolfin::fem::GenericDofMap::*)() const) &
-                       dolfin::fem::GenericDofMap::dofs)
+                       dolfin::fem::GenericDofMap::*)() const)
+                       & dolfin::fem::GenericDofMap::dofs)
       .def("dofs",
            (std::vector<dolfin::la_index_t>(dolfin::fem::GenericDofMap::*)(
-               const dolfin::mesh::Mesh &, std::size_t) const) &
-               dolfin::fem::GenericDofMap::dofs)
+               const dolfin::mesh::Mesh&, std::size_t) const)
+               & dolfin::fem::GenericDofMap::dofs)
       .def("entity_dofs",
            (std::vector<dolfin::la_index_t>(dolfin::fem::GenericDofMap::*)(
-               const dolfin::mesh::Mesh &, std::size_t) const) &
-               dolfin::fem::GenericDofMap::entity_dofs)
+               const dolfin::mesh::Mesh&, std::size_t) const)
+               & dolfin::fem::GenericDofMap::entity_dofs)
       .def("entity_dofs",
            (std::vector<dolfin::la_index_t>(dolfin::fem::GenericDofMap::*)(
-               const dolfin::mesh::Mesh &, std::size_t,
-               const std::vector<std::size_t> &) const) &
-               dolfin::fem::GenericDofMap::entity_dofs)
+               const dolfin::mesh::Mesh&, std::size_t,
+               const std::vector<std::size_t>&) const)
+               & dolfin::fem::GenericDofMap::entity_dofs)
       .def("num_entity_dofs", &dolfin::fem::GenericDofMap::num_entity_dofs)
       .def("tabulate_local_to_global_dofs",
            &dolfin::fem::GenericDofMap::tabulate_local_to_global_dofs)
       .def("tabulate_entity_dofs",
-           [](const dolfin::fem::GenericDofMap &instance,
+           [](const dolfin::fem::GenericDofMap& instance,
               std::size_t entity_dim, std::size_t cell_entity_index) {
-             std::vector<std::size_t> dofs(
-                 instance.num_entity_dofs(entity_dim));
+             std::vector<int> dofs(instance.num_entity_dofs(entity_dim));
              instance.tabulate_entity_dofs(dofs, entity_dim, cell_entity_index);
-             return py::array_t<std::size_t>(dofs.size(), dofs.data());
+             return py::array_t<int>(dofs.size(), dofs.data());
            })
       .def("block_size", &dolfin::fem::GenericDofMap::block_size)
       .def("tabulate_local_to_global_dofs",
-           [](const dolfin::fem::GenericDofMap &instance) {
-             std::vector<std::size_t> dofs;
-             instance.tabulate_local_to_global_dofs(dofs);
+           [](const dolfin::fem::GenericDofMap& instance) {
+             std::vector<std::size_t> dofs
+                 = instance.tabulate_local_to_global_dofs();
              return py::array_t<std::size_t>(dofs.size(), dofs.data());
            })
-      .def("set", &dolfin::fem::GenericDofMap::set)
-      .def_readonly("constrained_domain",
-                    &dolfin::fem::GenericDofMap::constrained_domain);
+      .def("set", &dolfin::fem::GenericDofMap::set);
 
   // dolfin::fem::DofMap
   py::class_<dolfin::fem::DofMap, std::shared_ptr<dolfin::fem::DofMap>,
-             dolfin::fem::GenericDofMap>(m, "DofMap", "DOLFIN DofMap object")
-      .def(py::init<std::shared_ptr<const ufc::dofmap>,
-                    const dolfin::mesh::Mesh &>())
-      .def(py::init<std::shared_ptr<const ufc::dofmap>,
-                    const dolfin::mesh::Mesh &,
-                    std::shared_ptr<const dolfin::mesh::SubDomain>>())
+             dolfin::fem::GenericDofMap>(m, "DofMap", "DofMap object")
+      .def(py::init<std::shared_ptr<const ufc_dofmap>,
+                    const dolfin::mesh::Mesh&>())
       .def("ownership_range", &dolfin::fem::DofMap::ownership_range)
       .def("cell_dofs", &dolfin::fem::DofMap::cell_dofs);
 
+  py::class_<dolfin::fem::CoordinateMapping,
+             std::shared_ptr<dolfin::fem::CoordinateMapping>>(
+      m, "CoordinateMapping", "Coordinate mapping object")
+      .def(py::init<std::shared_ptr<const ufc_coordinate_mapping>>());
+
   // dolfin::fem::SparsityPatternBuilder
   py::class_<dolfin::fem::SparsityPatternBuilder>(m, "SparsityPatternBuilder")
-      .def_static("build", &dolfin::fem::SparsityPatternBuilder::build,
-                  py::arg("sparsity_pattern"), py::arg("mesh"),
-                  py::arg("dofmaps"), py::arg("cells"),
-                  py::arg("interior_facets"), py::arg("exterior_facets"),
-                  py::arg("vertices"), py::arg("diagonal"),
-                  py::arg("init") = true, py::arg("finalize") = true);
+      .def_static(
+          "build",
+          [](const MPICommWrapper comm, const dolfin::mesh::Mesh& mesh,
+             const std::array<const dolfin::fem::GenericDofMap*, 2> dofmaps,
+             bool cells, bool interior_facets, bool exterior_facets,
+             bool vertices, bool diagonal, bool finalize) {
+            return dolfin::fem::SparsityPatternBuilder::build(
+                comm.get(), mesh, dofmaps, cells, interior_facets,
+                exterior_facets, vertices, diagonal, finalize);
+          },
+          py::arg("mpi_comm"), py::arg("mesh"), py::arg("dofmaps"),
+          py::arg("cells"), py::arg("interior_facets"),
+          py::arg("exterior_facets"), py::arg("vertices"), py::arg("diagonal"),
+          py::arg("finalize") = true,
+          "Create SparsityPattern from pair of dofmaps");
 
   // dolfin::fem::DirichletBC
   py::class_<dolfin::fem::DirichletBC,
              std::shared_ptr<dolfin::fem::DirichletBC>,
              dolfin::common::Variable>
-      dirichletbc(m, "DirichletBC", "DirichletBC object");
+      dirichletbc(
+          m, "DirichletBC",
+          "Object for representing Dirichlet (essential) boundary conditions");
 
   // dolfin::fem::DirichletBC  enum
   py::enum_<dolfin::fem::DirichletBC::Method>(dirichletbc, "Method")
@@ -210,7 +218,7 @@ void fem(py::module &m) {
       .value("geometric", dolfin::fem::DirichletBC::Method::geometric)
       .value("pointwise", dolfin::fem::DirichletBC::Method::pointwise);
 
-  dirichletbc.def(py::init<const dolfin::fem::DirichletBC &>())
+  dirichletbc.def(py::init<const dolfin::fem::DirichletBC&>())
       .def(py::init<std::shared_ptr<const dolfin::function::FunctionSpace>,
                     std::shared_ptr<const dolfin::function::GenericFunction>,
                     std::shared_ptr<const dolfin::mesh::SubDomain>,
@@ -230,31 +238,46 @@ void fem(py::module &m) {
       .def("homogenize", &dolfin::fem::DirichletBC::homogenize)
       .def("method", &dolfin::fem::DirichletBC::method)
       .def("get_boundary_values",
-           [](const dolfin::fem::DirichletBC &instance) {
+           [](const dolfin::fem::DirichletBC& instance) {
              dolfin::fem::DirichletBC::Map map;
              instance.get_boundary_values(map);
              return map;
            })
       .def("user_subdomain", &dolfin::fem::DirichletBC::user_sub_domain)
       .def("set_value", &dolfin::fem::DirichletBC::set_value)
-      .def("set_value", [](dolfin::fem::DirichletBC &self, py::object value) {
-        auto _u =
-            value.attr("_cpp_object")
-                .cast<
-                    std::shared_ptr<const dolfin::function::GenericFunction>>();
+      .def("set_value", [](dolfin::fem::DirichletBC& self, py::object value) {
+        auto _u = value.attr("_cpp_object")
+                      .cast<std::shared_ptr<
+                          const dolfin::function::GenericFunction>>();
         self.set_value(_u);
       });
 
   // dolfin::fem::Assembler
-  py::class_<dolfin::fem::Assembler, std::shared_ptr<dolfin::fem::Assembler>>(
-      m, "Assembler",
-      "Assembler object for assembling forms into matrices and vectors")
+  py::class_<dolfin::fem::Assembler, std::shared_ptr<dolfin::fem::Assembler>>
+      assembler(
+          m, "Assembler",
+          "Assembler object for assembling forms into matrices and vectors");
+
+  // dolfin::fem::Assembler::BlockType enum
+  py::enum_<dolfin::fem::Assembler::BlockType>(assembler, "BlockType")
+      .value("nested", dolfin::fem::Assembler::BlockType::nested)
+      .value("monolithic", dolfin::fem::Assembler::BlockType::monolithic);
+
+  // dolfin::fem::Assembler
+  assembler
       .def(py::init<
            std::vector<std::vector<std::shared_ptr<const dolfin::fem::Form>>>,
            std::vector<std::shared_ptr<const dolfin::fem::Form>>,
            std::vector<std::shared_ptr<const dolfin::fem::DirichletBC>>>())
-      .def("assemble", py::overload_cast<dolfin::la::PETScMatrix &,
-                                         dolfin::la::PETScVector &>(
+      .def(
+          "assemble",
+          py::overload_cast<dolfin::la::PETScMatrix&, dolfin::la::PETScVector&>(
+              &dolfin::fem::Assembler::assemble))
+      .def("assemble", py::overload_cast<dolfin::la::PETScMatrix&,
+                                         dolfin::fem::Assembler::BlockType>(
+                           &dolfin::fem::Assembler::assemble))
+      .def("assemble", py::overload_cast<dolfin::la::PETScVector&,
+                                         dolfin::fem::Assembler::BlockType>(
                            &dolfin::fem::Assembler::assemble));
 
   // dolfin::fem::AssemblerBase
@@ -277,50 +300,51 @@ void fem(py::module &m) {
            std::shared_ptr<const dolfin::fem::Form>,
            std::shared_ptr<const dolfin::fem::Form>,
            std::vector<std::shared_ptr<const dolfin::fem::DirichletBC>>>())
-      .def("assemble",
-           (void (dolfin::fem::SystemAssembler::*)(dolfin::la::PETScMatrix &,
-                                                   dolfin::la::PETScVector &)) &
-               dolfin::fem::SystemAssembler::assemble)
-      .def("assemble",
-           (void (dolfin::fem::SystemAssembler::*)(dolfin::la::PETScMatrix &)) &
-               dolfin::fem::SystemAssembler::assemble)
-      .def("assemble",
-           (void (dolfin::fem::SystemAssembler::*)(dolfin::la::PETScVector &)) &
-               dolfin::fem::SystemAssembler::assemble)
       .def("assemble", (void (dolfin::fem::SystemAssembler::*)(
-                           dolfin::la::PETScMatrix &, dolfin::la::PETScVector &,
-                           const dolfin::la::PETScVector &)) &
-                           dolfin::fem::SystemAssembler::assemble)
+                           dolfin::la::PETScMatrix&, dolfin::la::PETScVector&))
+                           & dolfin::fem::SystemAssembler::assemble)
+      .def("assemble",
+           (void (dolfin::fem::SystemAssembler::*)(dolfin::la::PETScMatrix&))
+               & dolfin::fem::SystemAssembler::assemble)
+      .def("assemble",
+           (void (dolfin::fem::SystemAssembler::*)(dolfin::la::PETScVector&))
+               & dolfin::fem::SystemAssembler::assemble)
+      .def("assemble", (void (dolfin::fem::SystemAssembler::*)(
+                           dolfin::la::PETScMatrix&, dolfin::la::PETScVector&,
+                           const dolfin::la::PETScVector&))
+                           & dolfin::fem::SystemAssembler::assemble)
       .def("assemble",
            (void (dolfin::fem::SystemAssembler::*)(
-               dolfin::la::PETScVector &, const dolfin::la::PETScVector &)) &
-               dolfin::fem::SystemAssembler::assemble);
+               dolfin::la::PETScVector&, const dolfin::la::PETScVector&))
+               & dolfin::fem::SystemAssembler::assemble);
 
   // dolfin::fem::DiscreteOperators
   py::class_<dolfin::fem::DiscreteOperators>(m, "DiscreteOperators")
       .def_static("build_gradient",
                   &dolfin::fem::DiscreteOperators::build_gradient)
       .def_static("build_gradient", [](py::object V0, py::object V1) {
-        auto _V0 =
-            V0.attr("_cpp_object").cast<dolfin::function::FunctionSpace *>();
-        auto _V1 =
-            V1.attr("_cpp_object").cast<dolfin::function::FunctionSpace *>();
+        auto _V0
+            = V0.attr("_cpp_object").cast<dolfin::function::FunctionSpace*>();
+        auto _V1
+            = V1.attr("_cpp_object").cast<dolfin::function::FunctionSpace*>();
         return dolfin::fem::DiscreteOperators::build_gradient(*_V0, *_V1);
       });
 
   // dolfin::fem::Form
   py::class_<dolfin::fem::Form, std::shared_ptr<dolfin::fem::Form>>(
       m, "Form", "DOLFIN Form object")
-      .def(py::init<std::shared_ptr<const ufc::form>,
+      .def(py::init<std::shared_ptr<const ufc_form>,
                     std::vector<std::shared_ptr<
                         const dolfin::function::FunctionSpace>>>())
+      .def(py::init<std::vector<
+               std::shared_ptr<const dolfin::function::FunctionSpace>>>())
       .def("num_coefficients",
-           [](const dolfin::fem::Form &self) { return self.coeffs().size(); },
+           [](const dolfin::fem::Form& self) { return self.coeffs().size(); },
            "Return number of coefficients in form")
       .def("original_coefficient_position",
            &dolfin::fem::Form::original_coefficient_position)
       .def("set_coefficient",
-           [](dolfin::fem::Form &self, std::size_t i,
+           [](dolfin::fem::Form& self, std::size_t i,
               std::shared_ptr<const dolfin::function::GenericFunction> f) {
              self.coeffs().set(i, f);
            })
@@ -331,59 +355,16 @@ void fem(py::module &m) {
       .def("set_interior_facet_domains",
            &dolfin::fem::Form::set_interior_facet_domains)
       .def("set_vertex_domains", &dolfin::fem::Form::set_vertex_domains)
+      .def("set_cell_tabulate",
+           [](dolfin::fem::Form& self, unsigned int i, std::size_t addr) {
+             auto tabulate_tensor_ptr
+                 = (void (*)(PetscScalar*, const PetscScalar* const*,
+                             const double*, int))addr;
+             self.integrals().set_cell_tabulate_tensor(i, tabulate_tensor_ptr);
+           })
       .def("rank", &dolfin::fem::Form::rank)
-      .def("mesh", &dolfin::fem::Form::mesh);
-
-  // dolfin::fem::PointSource
-  py::class_<dolfin::fem::PointSource,
-             std::shared_ptr<dolfin::fem::PointSource>>(m, "PointSource")
-      // FIXME: consolidate down to one intialiser when switching from
-      // SWIG to pybind11
-      .def(
-          py::init([](py::object V,
-                      const std::vector<
-                          std::pair<dolfin::geometry::Point, double>>
-                          values) {
-            std::shared_ptr<const dolfin::function::FunctionSpace> _V;
-            if (py::hasattr(V, "_cpp_object"))
-              _V =
-                  V.attr("_cpp_object")
-                      .cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-            else
-              _V = V.cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-
-            return std::make_unique<dolfin::fem::PointSource>(_V, values);
-          }),
-          py::arg("V"), py::arg("values"))
-      .def(
-          py::init([](py::object V0, py::object V1,
-                      const std::vector<
-                          std::pair<dolfin::geometry::Point, double>>
-                          values) {
-            std::shared_ptr<const dolfin::function::FunctionSpace> _V0, _V1;
-            if (py::hasattr(V0, "_cpp_object"))
-              _V0 =
-                  V0.attr("_cpp_object")
-                      .cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-            else
-              _V0 = V0.cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-
-            if (py::hasattr(V1, "_cpp_object"))
-              _V1 =
-                  V1.attr("_cpp_object")
-                      .cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-            else
-              _V1 = V1.cast<std::shared_ptr<dolfin::function::FunctionSpace>>();
-
-            return std::make_unique<dolfin::fem::PointSource>(_V0, _V1, values);
-          }),
-          py::arg("V0"), py::arg("V1"), py::arg("values"))
-      .def("apply",
-           (void (dolfin::fem::PointSource::*)(dolfin::la::PETScVector &)) &
-               dolfin::fem::PointSource::apply)
-      .def("apply",
-           (void (dolfin::fem::PointSource::*)(dolfin::la::PETScMatrix &)) &
-               dolfin::fem::PointSource::apply);
+      .def("mesh", &dolfin::fem::Form::mesh)
+      .def("coordinate_mapping", &dolfin::fem::Form::coordinate_mapping);
 
   // dolfin::fem::NonlinearVariationalProblem
   py::class_<dolfin::fem::NonlinearVariationalProblem,
@@ -398,21 +379,20 @@ void fem(py::module &m) {
       .def("set_bounds",
            (void (dolfin::fem::NonlinearVariationalProblem::*)(
                std::shared_ptr<const dolfin::la::PETScVector>,
-               std::shared_ptr<const dolfin::la::PETScVector>)) &
-               dolfin::fem::NonlinearVariationalProblem::set_bounds)
+               std::shared_ptr<const dolfin::la::PETScVector>))
+               & dolfin::fem::NonlinearVariationalProblem::set_bounds)
       .def("set_bounds",
            (void (dolfin::fem::NonlinearVariationalProblem::*)(
-               const dolfin::function::Function &,
-               const dolfin::function::Function &)) &
-               dolfin::fem::NonlinearVariationalProblem::set_bounds)
-      .def("set_bounds", [](dolfin::fem::NonlinearVariationalProblem &self,
+               const dolfin::function::Function&,
+               const dolfin::function::Function&))
+               & dolfin::fem::NonlinearVariationalProblem::set_bounds)
+      .def("set_bounds", [](dolfin::fem::NonlinearVariationalProblem& self,
                             py::object lb, py::object ub) {
-        auto &_lb = lb.attr("_cpp_object").cast<dolfin::function::Function &>();
-        auto &_ub = ub.attr("_cpp_object").cast<dolfin::function::Function &>();
+        auto& _lb = lb.attr("_cpp_object").cast<dolfin::function::Function&>();
+        auto& _ub = ub.attr("_cpp_object").cast<dolfin::function::Function&>();
         self.set_bounds(_lb, _ub);
       });
 
-#ifdef HAS_PETSC
   // dolfin::fem::PETScDMCollection
   py::class_<dolfin::fem::PETScDMCollection,
              std::shared_ptr<dolfin::fem::PETScDMCollection>>(
@@ -421,11 +401,11 @@ void fem(py::module &m) {
                std::shared_ptr<const dolfin::function::FunctionSpace>>>())
       .def(py::init([](py::list V) {
         std::vector<std::shared_ptr<const dolfin::function::FunctionSpace>> _V;
-        for (auto space : V) {
-          auto _space =
-              space.attr("_cpp_object")
-                  .cast<
-                      std::shared_ptr<const dolfin::function::FunctionSpace>>();
+        for (auto space : V)
+        {
+          auto _space = space.attr("_cpp_object")
+                            .cast<std::shared_ptr<
+                                const dolfin::function::FunctionSpace>>();
           _V.push_back(_space);
         }
         return dolfin::fem::PETScDMCollection(_V);
@@ -436,52 +416,13 @@ void fem(py::module &m) {
           "create_transfer_matrix",
           [](py::object V_coarse, py::object V_fine) {
             auto _V0 = V_coarse.attr("_cpp_object")
-                           .cast<dolfin::function::FunctionSpace *>();
+                           .cast<dolfin::function::FunctionSpace*>();
             auto _V1 = V_fine.attr("_cpp_object")
-                           .cast<dolfin::function::FunctionSpace *>();
+                           .cast<dolfin::function::FunctionSpace*>();
             return dolfin::fem::PETScDMCollection::create_transfer_matrix(*_V0,
                                                                           *_V1);
           })
       .def("check_ref_count", &dolfin::fem::PETScDMCollection::check_ref_count)
       .def("get_dm", &dolfin::fem::PETScDMCollection::get_dm);
-#endif
-
-  // FEM utils free functions
-  // m.def("create_mesh", dolfin::fem::create_mesh);
-  // m.def("create_mesh", [](const py::object u) {
-  //  auto _u = u.attr("_cpp_object").cast<dolfin::function::Function*>();
-  //  return dolfin::fem::create_mesh(*_u);
-  //});
-
-  // m.def("set_coordinates", &dolfin::fem::set_coordinates);
-  // m.def("set_coordinates", [](dolfin::mesh::MeshGeometry &geometry,
-  //                             const py::object u) {
-  //   auto _u = u.attr("_cpp_object").cast<const dolfin::function::Function
-  //   *>(); dolfin::fem::set_coordinates(geometry, *_u);
-  // });
-
-  // m.def("get_coordinates", &dolfin::fem::get_coordinates);
-  // m.def("get_coordinates",
-  //       [](py::object u, const dolfin::mesh::MeshGeometry &geometry) {
-  //         auto _u = u.attr("_cpp_object").cast<dolfin::function::Function
-  //         *>(); return dolfin::fem::get_coordinates(*_u, geometry);
-  //       });
-
-  m.def("vertex_to_dof_map", [](const dolfin::function::FunctionSpace &V) {
-    const auto _v2d = dolfin::fem::vertex_to_dof_map(V);
-    return py::array_t<dolfin::la_index_t>(_v2d.size(), _v2d.data());
-  });
-
-  m.def("vertex_to_dof_map", [](py::object V) {
-    auto _V = V.attr("_cpp_object").cast<dolfin::function::FunctionSpace *>();
-    const auto _v2d = dolfin::fem::vertex_to_dof_map(*_V);
-    return py::array_t<dolfin::la_index_t>(_v2d.size(), _v2d.data());
-  });
-  m.def("dof_to_vertex_map", &dolfin::fem::dof_to_vertex_map);
-  m.def("dof_to_vertex_map", [](py::object V) {
-    auto _V = V.attr("_cpp_object").cast<dolfin::function::FunctionSpace *>();
-    const auto _d2v = dolfin::fem::dof_to_vertex_map(*_V);
-    return py::array_t<std::size_t>(_d2v.size(), _d2v.data());
-  });
 }
 } // namespace dolfin_wrappers

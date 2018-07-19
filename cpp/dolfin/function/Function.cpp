@@ -11,6 +11,7 @@
 #include <dolfin/common/Timer.h>
 #include <dolfin/common/constants.h>
 #include <dolfin/common/utils.h>
+#include <dolfin/fem/CoordinateMapping.h>
 #include <dolfin/fem/DirichletBC.h>
 #include <dolfin/fem/FiniteElement.h>
 #include <dolfin/fem/GenericDofMap.h>
@@ -22,7 +23,8 @@
 #include <dolfin/mesh/MeshIterator.h>
 #include <dolfin/mesh/Vertex.h>
 #include <dolfin/parameter/GlobalParameters.h>
-#include <map>
+#include <unordered_map>
+#include <unsupported/Eigen/CXX11/Tensor>
 #include <utility>
 #include <vector>
 
@@ -35,10 +37,8 @@ Function::Function(std::shared_ptr<const FunctionSpace> V) : _function_space(V)
   // Check that we don't have a subspace
   if (!V->component().empty())
   {
-    log::dolfin_error(
-        "Function.cpp", "create function",
-        "Cannot be created from subspace. Consider collapsing the "
-        "function space");
+    throw std::runtime_error("Cannot create Function from subspace. Consider "
+                             "collapsing the function space");
   }
 
   // Initialize vector
@@ -53,8 +53,8 @@ Function::Function(std::shared_ptr<const FunctionSpace> V,
   // creating subfunctions
 
   // Assertion uses '<=' to deal with sub-functions
-  dolfin_assert(V->dofmap());
-  dolfin_assert(V->dofmap()->global_dimension() <= x->size());
+  assert(V->dofmap());
+  assert(V->dofmap()->global_dimension() <= x->size());
 }
 //-----------------------------------------------------------------------------
 Function::Function(const Function& v)
@@ -62,7 +62,7 @@ Function::Function(const Function& v)
   // Make a copy of all the data, or if v is a sub-function, then we
   // collapse the dof map and copy only the relevant entries from the
   // vector of v.
-  dolfin_assert(v._vector);
+  assert(v._vector);
   if (v._vector->size() == v._function_space->dim())
   {
     // Copy function space pointer
@@ -75,7 +75,7 @@ Function::Function(const Function& v)
   {
     // Create new collapsed FunctionSpace
     std::unordered_map<std::size_t, std::size_t> collapsed_map;
-    _function_space = v._function_space->collapse(collapsed_map);
+    std::tie(_function_space, collapsed_map) = v._function_space->collapse();
 
     // Get row indices of original and new vectors
     std::unordered_map<std::size_t, std::size_t>::const_iterator entry;
@@ -89,16 +89,15 @@ Function::Function(const Function& v)
     }
 
     // Gather values into a vector
-    dolfin_assert(v.vector());
-    std::vector<double> gathered_values(collapsed_map.size());
+    assert(v.vector());
+    std::vector<PetscScalar> gathered_values(collapsed_map.size());
     v.vector()->get_local(gathered_values.data(), gathered_values.size(),
                           old_rows.data());
 
     // Initial new vector (global)
     init_vector();
-    dolfin_assert(_function_space->dofmap());
-    dolfin_assert(_vector->size()
-                  == _function_space->dofmap()->global_dimension());
+    assert(_function_space->dofmap());
+    assert(_vector->size() == _function_space->dofmap()->global_dimension());
 
     // FIXME (local): Check this for local or global
     // Set values in vector
@@ -111,7 +110,7 @@ Function::Function(const Function& v)
 /*
 const Function& Function::operator= (const Function& v)
 {
-  dolfin_assert(v._vector);
+  assert(v._vector);
 
   // Make a copy of all the data, or if v is a sub-function, then we
   // collapse the dof map and copy only the relevant entries from the
@@ -145,15 +144,15 @@ const Function& Function::operator= (const Function& v)
     }
 
     // Gather values into a vector
-    dolfin_assert(v.vector());
+    assert(v.vector());
     std::vector<double> gathered_values(collapsed_map.size());
     v.vector()->get_local(gathered_values.data(), gathered_values.size(),
                           old_rows.data());
 
     // Initial new vector (global)
     init_vector();
-    dolfin_assert(_function_space->dofmap());
-    dolfin_assert(_vector->size()
+    assert(_function_space->dofmap());
+    assert(_vector->size()
                   == _function_space->dofmap()->global_dimension());
 
     // FIXME (local): Check this for local or global
@@ -173,46 +172,21 @@ Function Function::sub(std::size_t i) const
   auto sub_space = _function_space->sub({i});
 
   // Return sub-function
-  dolfin_assert(sub_space);
-  dolfin_assert(_vector);
+  assert(sub_space);
+  assert(_vector);
   return Function(sub_space, _vector);
-}
-//-----------------------------------------------------------------------------
-void Function::operator=(const function::FunctionAXPY& axpy)
-{
-  if (axpy.pairs().size() == 0)
-  {
-    log::dolfin_error("Function.cpp", "assign function",
-                      "FunctionAXPY is empty.");
-  }
-
-  // Make an initial assign and scale
-  dolfin_assert(axpy.pairs()[0].second);
-  *this = *(axpy.pairs()[0].second);
-  if (axpy.pairs()[0].first != 1.0)
-    *_vector *= axpy.pairs()[0].first;
-
-  // Start from item 2 and axpy
-  std::vector<std::pair<double,
-                        std::shared_ptr<const Function>>>::const_iterator it;
-  for (it = axpy.pairs().begin() + 1; it != axpy.pairs().end(); it++)
-  {
-    dolfin_assert(it->second);
-    dolfin_assert(it->second->vector());
-    _vector->axpy(it->first, *(it->second->vector()));
-  }
 }
 //-----------------------------------------------------------------------------
 std::shared_ptr<la::PETScVector> Function::vector()
 {
-  dolfin_assert(_vector);
-  dolfin_assert(_function_space->dofmap());
+  assert(_vector);
+  assert(_function_space->dofmap());
 
   // Check that this is not a sub function.
   if (_vector->size() != _function_space->dofmap()->global_dimension())
   {
-    log::dolfin_error("Function.cpp", "access vector of degrees of freedom",
-                      "Cannot access a non-const vector from a subfunction");
+    throw std::runtime_error(
+        "Cannot access a non-const vector from a subfunction");
   }
 
   return _vector;
@@ -220,15 +194,17 @@ std::shared_ptr<la::PETScVector> Function::vector()
 //-----------------------------------------------------------------------------
 std::shared_ptr<const la::PETScVector> Function::vector() const
 {
-  dolfin_assert(_vector);
+  assert(_vector);
   return _vector;
 }
 //-----------------------------------------------------------------------------
-void Function::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x) const
+void Function::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                            Eigen::Dynamic, Eigen::RowMajor>>
+                        values,
+                    Eigen::Ref<const EigenRowArrayXXd> x) const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->mesh());
+  assert(_function_space);
+  assert(_function_space->mesh());
   const mesh::Mesh& mesh = *_function_space->mesh();
 
   // Find the cell that contains x
@@ -253,68 +229,121 @@ void Function::eval(Eigen::Ref<EigenRowMatrixXd> values,
         id = close.first;
       else
       {
-        log::dolfin_error("Function.cpp", "evaluate function at point",
-                          "The point is not inside the domain.");
+        throw std::runtime_error("Cannot evaluate function at point. The point "
+                                 "is not inside the domain.");
       }
     }
 
     // Create cell that contains point
     const mesh::Cell cell(mesh, id);
-    ufc::cell ufc_cell;
-    cell.get_cell_data(ufc_cell);
 
     // Call evaluate function
-    eval(values.row(i), x.row(i), cell, ufc_cell);
+    eval(values.row(i), x.row(i), cell);
   }
 }
 //-----------------------------------------------------------------------------
-void Function::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x,
-                    const mesh::Cell& dolfin_cell,
-                    const ufc::cell& ufc_cell) const
+void Function::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                            Eigen::Dynamic, Eigen::RowMajor>>
+                        values,
+                    Eigen::Ref<const EigenRowArrayXXd> x,
+                    const mesh::Cell& cell) const
 {
-  dolfin_assert(x.rows() == values.rows());
-  dolfin_assert(_function_space->element());
+  assert(_function_space);
+  assert(_function_space->mesh());
+  const mesh::Mesh& mesh = *_function_space->mesh();
+
+  // FIXME: Should this throw an error instead?
+  if (cell.mesh().id() != mesh.id())
+  {
+    eval(values, x);
+    return;
+  }
+
+  assert(x.rows() == values.rows());
+  assert(_function_space->element());
   const fem::FiniteElement& element = *_function_space->element();
 
-  // Compute in tensor (one for scalar function, . . .)
-  const std::size_t value_size_loc = value_size();
-
-  dolfin_assert((std::size_t)values.cols() == value_size_loc);
-
   // Create work vector for expansion coefficients
-  std::vector<double> coefficients(element.space_dimension());
+  Eigen::Matrix<PetscScalar, 1, Eigen::Dynamic> coefficients(
+      element.space_dimension());
 
   // Cell coordinates (re-allocated inside function for thread safety)
-  std::vector<double> coordinate_dofs;
-  dolfin_cell.get_coordinate_dofs(coordinate_dofs);
+  EigenRowArrayXXd coordinate_dofs(cell.num_vertices(), mesh.geometry().dim());
+  cell.get_coordinate_dofs(coordinate_dofs);
 
   // Restrict function to cell
-  restrict(coefficients.data(), element, dolfin_cell, coordinate_dofs.data(),
-           ufc_cell);
+  restrict(coefficients.data(), element, cell, coordinate_dofs);
 
-  // Create work vector for basis
-  std::vector<double> basis(value_size_loc);
+  // Get coordinate mapping
+  auto cmap = mesh.geometry().coord_mapping;
+  if (!cmap)
+  {
+    throw std::runtime_error(
+        "fem::CoordinateMapping has not been attached to mesh.");
+  }
 
-  // Initialise values
+  std::size_t num_points = x.rows();
+  std::size_t gdim = mesh.geometry().dim();
+  std::size_t tdim = mesh.topology().dim();
+
+  std::size_t reference_value_size = element.reference_value_size();
+  std::size_t value_size = element.value_size();
+  std::size_t space_dimension = element.space_dimension();
+
+  Eigen::Tensor<double, 3, Eigen::RowMajor> J(num_points, gdim, tdim);
+  EigenArrayXd detJ(num_points);
+  Eigen::Tensor<double, 3, Eigen::RowMajor> K(num_points, tdim, gdim);
+
+  EigenRowArrayXXd X(x.rows(), tdim);
+
+  // boost::multi_array<double, 3> basis_reference_values(
+  //     boost::extents[num_points][space_dimension][reference_value_size]);
+  Eigen::Tensor<double, 3, Eigen::RowMajor> basis_reference_values(
+      num_points, space_dimension, reference_value_size);
+
+  Eigen::Tensor<double, 3, Eigen::RowMajor> basis_values(
+      num_points, space_dimension, value_size);
+
+  // Compute reference coordinates X, and J, detJ and K
+  cmap->compute_reference_geometry(X, J, detJ, K, x, coordinate_dofs);
+
+  // std::cout << "Physical x: " << std::endl;
+  // std::cout << x << std::endl;
+  // std::cout << "Reference X: " << std::endl;
+  // std::cout << X << std::endl;
+
+  // // Compute basis on reference element
+  element.evaluate_reference_basis(basis_reference_values, X);
+
+  // // Push basis forward to physical element
+  element.transform_reference_basis(basis_values, basis_reference_values, X, J,
+                                    detJ, K);
+
+  // Compute expansion
+  // std::cout << "Num points, space dim, value_size: " << num_points << ", "
+  //           << space_dimension << ", " << value_size << std::endl;
   values.setZero();
-
-  // Compute linear combination for each row of x
-  for (unsigned int k = 0; k < x.rows(); ++k)
-    for (std::size_t i = 0; i < element.space_dimension(); ++i)
+  for (std::size_t p = 0; p < num_points; ++p)
+  {
+    for (std::size_t i = 0; i < space_dimension; ++i)
     {
-      element.evaluate_basis(i, basis.data(), x.data() + k * x.cols(),
-                             coordinate_dofs.data(), ufc_cell.orientation);
+      for (std::size_t j = 0; j < value_size; ++j)
+      {
+        // std::cout << "Loop: " << p << ", " << i << ", " << j << std::endl;
+        // std::cout << "  Coeff, Basis: " << coefficients[i] << ", "
+        //           << basis_values(p, i, j) << std::endl;
 
-      for (std::size_t j = 0; j < value_size_loc; ++j)
-        values(k, j) += coefficients[i] * basis[j];
+        // TODO: Find an Eigen shortcut fot this operation
+        values.row(p)[j] += coefficients[i] * basis_values(p, i, j);
+      }
     }
+  }
 }
 //-----------------------------------------------------------------------------
 void Function::interpolate(const GenericFunction& v)
 {
-  dolfin_assert(_vector);
-  dolfin_assert(_function_space);
+  assert(_vector);
+  assert(_function_space);
 
   // Interpolate
   _function_space->interpolate(*_vector, v);
@@ -322,56 +351,36 @@ void Function::interpolate(const GenericFunction& v)
 //-----------------------------------------------------------------------------
 std::size_t Function::value_rank() const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->element());
+  assert(_function_space);
+  assert(_function_space->element());
   return _function_space->element()->value_rank();
 }
 //-----------------------------------------------------------------------------
 std::size_t Function::value_dimension(std::size_t i) const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->element());
+  assert(_function_space);
+  assert(_function_space->element());
   return _function_space->element()->value_dimension(i);
 }
 //-----------------------------------------------------------------------------
 std::vector<std::size_t> Function::value_shape() const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->element());
+  assert(_function_space);
+  assert(_function_space->element());
   std::vector<std::size_t> _shape(this->value_rank(), 1);
   for (std::size_t i = 0; i < _shape.size(); ++i)
     _shape[i] = this->value_dimension(i);
   return _shape;
 }
 //-----------------------------------------------------------------------------
-void Function::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x,
-                    const ufc::cell& ufc_cell) const
+void Function::restrict(
+    PetscScalar* w, const fem::FiniteElement& element,
+    const mesh::Cell& dolfin_cell,
+    const Eigen::Ref<const EigenRowArrayXXd>& coordinate_dofs) const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->mesh());
-  const mesh::Mesh& mesh = *_function_space->mesh();
-
-  // Check if UFC cell comes from mesh, otherwise
-  // find the cell which contains the point
-  dolfin_assert(ufc_cell.mesh_identifier >= 0);
-  if (ufc_cell.mesh_identifier == (int)mesh.id())
-  {
-    const mesh::Cell cell(mesh, ufc_cell.index);
-    eval(values, x, cell, ufc_cell);
-  }
-  else
-    eval(values, x);
-}
-//-----------------------------------------------------------------------------
-void Function::restrict(double* w, const fem::FiniteElement& element,
-                        const mesh::Cell& dolfin_cell,
-                        const double* coordinate_dofs,
-                        const ufc::cell& ufc_cell) const
-{
-  dolfin_assert(w);
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->dofmap());
+  assert(w);
+  assert(_function_space);
+  assert(_function_space->dofmap());
 
   // Check if we are restricting to an element of this function space
   if (_function_space->has_element(element)
@@ -395,18 +404,19 @@ void Function::restrict(double* w, const fem::FiniteElement& element,
   //  }
 }
 //-----------------------------------------------------------------------------
-EigenRowArrayXXd Function::compute_vertex_values(const mesh::Mesh& mesh) const
+Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+Function::compute_point_values(const mesh::Mesh& mesh) const
 {
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->mesh());
+  assert(_function_space);
+  assert(_function_space->mesh());
 
   // Check that the mesh matches. Notice that the hash is only
   // compared if the pointers are not matching.
   if (&mesh != _function_space->mesh().get()
-      && mesh.hash() != _function_space->mesh()->hash())
+      and mesh.hash() != _function_space->mesh()->hash())
   {
-    log::dolfin_error("Function.cpp", "interpolate function values at vertices",
-                      "Non-matching mesh");
+    throw std::runtime_error(
+        "Cannot interpolate function values at points. Non-matching mesh");
   }
 
   // Local data for interpolation on each cell
@@ -416,41 +426,44 @@ EigenRowArrayXXd Function::compute_vertex_values(const mesh::Mesh& mesh) const
   // Compute in tensor (one for scalar function, . . .)
   const std::size_t value_size_loc = value_size();
 
-  // Resize Array for holding vertex values
-  EigenRowArrayXXd vertex_values(mesh.num_vertices(), value_size_loc);
+  // Resize Array for holding point values
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      point_values(mesh.geometry().num_points(), value_size_loc);
 
-  // Interpolate vertex values on each cell (using last computed value
+  // Interpolate point values on each cell (using last computed value
   // if not continuous, e.g. discontinuous Galerkin methods)
-  ufc::cell ufc_cell;
-  EigenRowMatrixXd x(num_cell_vertices, mesh.geometry().dim());
-  EigenRowMatrixXd values(num_cell_vertices, value_size_loc);
+  EigenRowArrayXXd x(num_cell_vertices, mesh.geometry().dim());
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      values(num_cell_vertices, value_size_loc);
+
+  const std::size_t tdim = mesh.topology().dim();
+  const mesh::MeshConnectivity& cell_dofs
+      = mesh.coordinate_dofs().entity_points(tdim);
 
   for (auto& cell : mesh::MeshRange<mesh::Cell>(mesh, mesh::MeshRangeType::ALL))
   {
-    // Update to current cell
-    cell.get_cell_data(ufc_cell);
+    // Get coordinates for all points in cell
     cell.get_coordinate_dofs(x);
+    values.resize(x.rows(), value_size_loc);
 
     // Call evaluate function
-    eval(values, x, cell, ufc_cell);
+    eval(values, x, cell);
 
-    // Copy values to array of vertex values
-    std::size_t local_index = 0;
-    for (auto& vertex : mesh::EntityRange<mesh::Vertex>(cell))
-    {
-      vertex_values.row(vertex.index()) = values.row(local_index);
-      ++local_index;
-    }
+    // Copy values to array of point values
+    const std::int32_t* dofs = cell_dofs(cell.index());
+    for (unsigned int i = 0; i < x.rows(); ++i)
+      point_values.row(dofs[i]) = values.row(i);
   }
 
-  return vertex_values;
+  return point_values;
 }
 //-----------------------------------------------------------------------------
-EigenRowArrayXXd Function::compute_vertex_values() const
+Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+Function::compute_point_values() const
 {
   assert(_function_space);
   assert(_function_space->mesh());
-  return compute_vertex_values(*_function_space->mesh());
+  return compute_point_values(*_function_space->mesh());
 }
 //-----------------------------------------------------------------------------
 void Function::init_vector()
@@ -458,89 +471,24 @@ void Function::init_vector()
   common::Timer timer("Init dof vector");
 
   // Get dof map
-  dolfin_assert(_function_space);
-  dolfin_assert(_function_space->dofmap());
+  assert(_function_space);
+  assert(_function_space->dofmap());
   const fem::GenericDofMap& dofmap = *(_function_space->dofmap());
 
   // Check that function space is not a subspace (view)
   if (dofmap.is_view())
   {
-    log::dolfin_error(
-        "Function.cpp", "initialize vector of degrees of freedom for function",
-        "Cannot be created from subspace. Consider collapsing the "
-        "function space");
+    std::runtime_error("Cannot initialize vector of degrees of freedom for "
+                       "function. Cannot be created from subspace. Consider "
+                       "collapsing the function space");
   }
 
   // Get index map
-  /*
   std::shared_ptr<const common::IndexMap> index_map = dofmap.index_map();
-  dolfin_assert(index_map);
+  assert(index_map);
 
-  MPI_Comm comm = _function_space->mesh()->mpi_comm();
-
-  // Create layout for initialising tensor
-  //std::shared_ptr<TensorLayout> tensor_layout;
-  //tensor_layout = factory.create_layout(comm, 1);
-  auto tensor_layout = std::make_shared<TensorLayout>(comm, 0,
-  TensorLayout::Sparsity::DENSE);
-
-  dolfin_assert(tensor_layout);
-  dolfin_assert(!tensor_layout->sparsity_pattern());
-  dolfin_assert(_function_space->mesh());
-  tensor_layout->init({index_map}, TensorLayout::Ghosts::GHOSTED);
-
-  // Create vector of dofs
-  if (!_vector)
-    _vector =
-  std::make_shared<la::la::PETScVector>(_function_space->mesh()->mpi_comm());
-  dolfin_assert(_vector);
-  if (!_vector->empty())
-  {
-    log::dolfin_error("Function.cpp",
-                 "initialize vector of degrees of freedom for function",
-                 "Cannot re-initialize a non-empty vector. Consider creating a
-  new function");
-
-  }
-  _vector->init(*tensor_layout);
-  _vector->zero();
-  */
-
-  // Get index map
-  std::shared_ptr<const common::IndexMap> index_map = dofmap.index_map();
-  dolfin_assert(index_map);
-
-  // Get block size
-  std::size_t bs = index_map->block_size();
-
-  // Build local-to-global map (blocks)
-  std::vector<dolfin::la_index_t> local_to_global(
-      index_map->size(common::IndexMap::MapSize::ALL));
-  for (std::size_t i = 0; i < local_to_global.size(); ++i)
-    local_to_global[i] = index_map->local_to_global(i);
-
-  // Build list of ghosts (global block indices)
-  const std::size_t nowned = index_map->size(common::IndexMap::MapSize::OWNED);
-  dolfin_assert(nowned + index_map->size(common::IndexMap::MapSize::UNOWNED)
-                == local_to_global.size());
-  std::vector<dolfin::la_index_t> ghosts(local_to_global.begin() + nowned,
-                                         local_to_global.end());
-
-  // Create vector of dofs
-  if (!_vector)
-    _vector = std::make_shared<la::PETScVector>(
-        _function_space->mesh()->mpi_comm());
-  dolfin_assert(_vector);
-
-  if (!_vector->empty())
-  {
-    log::dolfin_error(
-        "Function.cpp", "initialize vector of degrees of freedom for function",
-        "Cannot re-initialize a non-empty vector. Consider creating a "
-        "new function");
-  }
-
-  _vector->init(index_map->local_range(), local_to_global, ghosts, bs);
-  _vector->zero();
+  _vector = std::make_shared<la::PETScVector>(*index_map);
+  assert(_vector);
+  _vector->set(0.0);
 }
 //-----------------------------------------------------------------------------

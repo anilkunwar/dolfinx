@@ -4,9 +4,7 @@
 //
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
-#ifdef HAS_PETSC
 #include <petscversion.h>
-#endif
 
 #ifdef HAS_HDF5
 #include <hdf5.h>
@@ -36,18 +34,9 @@ bool dolfin::has_debug()
 #endif
 }
 //-------------------------------------------------------------------------
-bool dolfin::has_mpi()
+bool dolfin::has_petsc_complex()
 {
-#ifdef HAS_MPI
-  return true;
-#else
-  return false;
-#endif
-}
-//-------------------------------------------------------------------------
-bool dolfin::has_petsc()
-{
-#ifdef HAS_PETSC
+#ifdef PETSC_USE_COMPLEX
   return true;
 #else
   return false;

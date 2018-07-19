@@ -1,25 +1,12 @@
-"""Unit tests for MeshFunctions"""
-
 # Copyright (C) 2011 Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 import pytest
 import numpy.random
-from dolfin import *
+from dolfin import UnitSquareMesh, UnitCubeMesh, MPI, MeshFunction, Vertex
 from dolfin_utils.test import fixture, skip_in_parallel
 
 
@@ -137,14 +124,14 @@ def test_Assign(f, cube):
 def test_meshfunction_where_equal():
     mesh = UnitSquareMesh(MPI.comm_self, 2, 2)
 
-    cf = MeshFunction("size_t", mesh, mesh.topology().dim(), 0)
+    cf = MeshFunction("size_t", mesh, mesh.topology.dim, 0)
     cf.set_all(1)
     cf[0] = 3
     cf[3] = 3
     assert list(cf.where_equal(3)) == [0, 3]
     assert list(cf.where_equal(1)) == [1, 2, 4, 5, 6, 7]
 
-    ff = MeshFunction("size_t", mesh, mesh.topology().dim() - 1, 100)
+    ff = MeshFunction("size_t", mesh, mesh.topology.dim - 1, 100)
     ff.set_all(0)
     ff[0] = 1
     ff[2] = 3

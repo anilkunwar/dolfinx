@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <array>
 #include <dolfin/geometry/Point.h>
-#include <dolfin/log/log.h>
 
 using namespace dolfin;
 using namespace dolfin::mesh;
@@ -51,8 +50,7 @@ CellType* CellType::create(Type type)
   case Type::hexahedron:
     return new HexahedronCell();
   default:
-    log::dolfin_error("CellType.cpp", "create cell type",
-                      "Unknown cell type (%d)", type);
+    throw std::runtime_error("Unknown cell type");
   }
 
   return 0;
@@ -78,11 +76,9 @@ CellType::Type CellType::string2type(std::string type)
   else if (type == "hexahedron")
     return Type::hexahedron;
   else
-  {
-    log::dolfin_error("CellType.cpp", "convert string to cell type",
-                      "Unknown cell type (\"%s\")", type.c_str());
-  }
+    throw std::runtime_error("Unknown cell type (" + type + ")");
 
+  // Should no reach this point
   return Type::interval;
 }
 //-----------------------------------------------------------------------------
@@ -103,8 +99,7 @@ std::string CellType::type2string(Type type)
   case Type::hexahedron:
     return "hexahedron";
   default:
-    log::dolfin_error("CellType.cpp", "convert cell type to string",
-                      "Unknown cell type (\"%d\")", type);
+    throw std::runtime_error("Unknown cell type");
   }
 
   return "";
@@ -131,9 +126,9 @@ double CellType::h(const MeshEntity& entity) const
 
   // Get the coordinates (Points) of the vertices
   const std::int32_t* vertices = entity.entities(0);
-  dolfin_assert(vertices);
+  assert(vertices);
   std::array<geometry::Point, 8> points;
-  dolfin_assert(num_vertices <= 8);
+  assert(num_vertices <= 8);
   for (int i = 0; i < num_vertices; ++i)
     points[i] = geometry.point(vertices[i]);
 
@@ -152,10 +147,10 @@ double CellType::inradius(const Cell& cell) const
 {
   // Check cell type
   if (_cell_type != Type::interval && _cell_type != Type::triangle
-      && _cell_type != Type::tetrahedron)
+      and _cell_type != Type::tetrahedron)
   {
-    log::dolfin_error("Cell.h", "compute cell inradius",
-                      "formula not implemented for non-simplicial cells");
+    throw std::runtime_error(
+        "inradius function not implemented for non-simplicial cells");
   }
 
   // Pick dim
@@ -188,62 +183,6 @@ double CellType::radius_ratio(const Cell& cell) const
     return 0.0;
   else
     return dim() * r / circumradius(cell);
-}
-//-----------------------------------------------------------------------------
-bool CellType::ordered(
-    const Cell& cell,
-    const std::vector<std::int64_t>& local_to_global_vertex_indices) const
-{
-  // Get mesh topology
-  const MeshTopology& topology = cell.mesh().topology();
-  const std::size_t dim = topology.dim();
-  const std::size_t c = cell.index();
-
-  // Get vertices
-  const std::size_t num_vertices = topology(dim, 0).size(c);
-  const std::int32_t* vertices = topology(dim, 0)(c);
-  dolfin_assert(vertices);
-
-  // Check that vertices are in ascending order
-  if (!increasing(num_vertices, vertices, local_to_global_vertex_indices))
-    return false;
-
-  // Note the comparison below: d + 1 < dim, not d < dim - 1
-  // Otherwise, d < dim - 1 will evaluate to true for dim = 0 with std::size_t
-
-  // Check numbering of entities of positive dimension and codimension
-  for (std::size_t d = 1; d + 1 < dim; d++)
-  {
-    // Check if entities exist, otherwise skip
-    const MeshConnectivity& connectivity = topology(d, 0);
-    if (connectivity.empty())
-      continue;
-
-    // Get entities
-    const std::size_t num_entities = topology(dim, d).size(c);
-    const std::int32_t* entities = topology(dim, d)(c);
-
-    // Iterate over entities
-    for (std::size_t e = 1; e < num_entities; e++)
-    {
-      // Get vertices for first entity
-      const std::size_t e0 = entities[e - 1];
-      const std::size_t n0 = connectivity.size(e0);
-      const std::int32_t* v0 = connectivity(e0);
-
-      // Get vertices for second entity
-      const std::size_t e1 = entities[e];
-      const std::size_t n1 = connectivity.size(e1);
-      const std::int32_t* v1 = connectivity(e1);
-
-      // Check ordering of entities
-      if (!increasing(n0, v0, n1, v1, num_vertices, vertices,
-                      local_to_global_vertex_indices))
-        return false;
-    }
-  }
-
-  return true;
 }
 //-----------------------------------------------------------------------------
 void CellType::sort_entities(
@@ -296,8 +235,8 @@ bool CellType::increasing(
     const std::int32_t* local_vertices,
     const std::vector<std::int64_t>& local_to_global_vertex_indices)
 {
-  dolfin_assert(n0 == n1);
-  dolfin_assert(num_vertices > n0);
+  assert(n0 == n1);
+  assert(num_vertices > n0);
   const std::size_t num_non_incident = num_vertices - n0;
 
   // Compute non-incident vertices for first entity
@@ -318,7 +257,7 @@ bool CellType::increasing(
     if (!incident)
       w0[k++] = v;
   }
-  dolfin_assert(k == num_non_incident);
+  assert(k == num_non_incident);
 
   // Compute non-incident vertices for second entity
   std::vector<std::size_t> w1(num_non_incident);
@@ -339,7 +278,7 @@ bool CellType::increasing(
     if (!incident)
       w1[k++] = v;
   }
-  dolfin_assert(k == num_non_incident);
+  assert(k == num_non_incident);
 
   // Compare lexicographic ordering of w0 and w1
   for (std::size_t i = 0; i < num_non_incident; i++)

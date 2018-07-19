@@ -8,26 +8,25 @@
 using namespace dolfin;
 using namespace dolfin::fem;
 
-void GenericDofMap::tabulate_local_to_global_dofs(
-    std::vector<std::size_t>& local_to_global_map) const
+//-----------------------------------------------------------------------------
+std::vector<std::size_t> GenericDofMap::tabulate_local_to_global_dofs() const
 {
   // FIXME: use common::IndexMap::local_to_global_index?
 
   const auto idxmap = index_map();
   assert(idxmap);
   const std::size_t bs = idxmap->block_size();
-  const std::vector<std::size_t>& local_to_global_unowned
-      = idxmap->local_to_global_unowned();
-  const std::size_t local_ownership_size
-      = bs * idxmap->size(common::IndexMap::MapSize::OWNED);
-  local_to_global_map.resize(bs * idxmap->size(common::IndexMap::MapSize::ALL));
+  const auto& local_to_global_unowned = idxmap->ghosts();
+  const std::size_t local_ownership_size = bs * idxmap->size_local();
+
+  std::vector<std::size_t> local_to_global_map(
+      bs * (idxmap->size_local() + idxmap->num_ghosts()));
 
   const std::size_t global_offset = bs * idxmap->local_range()[0];
   for (std::size_t i = 0; i < local_ownership_size; ++i)
     local_to_global_map[i] = i + global_offset;
 
-  for (std::size_t node = 0; node < idxmap->local_to_global_unowned().size();
-       ++node)
+  for (Eigen::Index node = 0; node < local_to_global_unowned.size(); ++node)
   {
     for (std::size_t component = 0; component < bs; ++component)
     {
@@ -35,6 +34,8 @@ void GenericDofMap::tabulate_local_to_global_dofs(
           = bs * local_to_global_unowned[node] + component;
     }
   }
+
+  return local_to_global_map;
 }
 //-----------------------------------------------------------------------------
 std::vector<dolfin::la_index_t> GenericDofMap::dofs(const mesh::Mesh& mesh,
@@ -52,7 +53,7 @@ std::vector<dolfin::la_index_t> GenericDofMap::dofs(const mesh::Mesh& mesh,
                                            * num_dofs_per_entity);
 
   // Iterate over cells
-  std::vector<std::size_t> entity_dofs_local;
+  std::vector<int> entity_dofs_local;
   for (auto& c : mesh::MeshRange<mesh::Cell>(mesh))
   {
     // Get local-to-global dofmap for cell
@@ -70,7 +71,7 @@ std::vector<dolfin::la_index_t> GenericDofMap::dofs(const mesh::Mesh& mesh,
       {
         const std::size_t entity_dof_local = entity_dofs_local[i];
         const dolfin::la_index_t dof_index = cell_dof_list[entity_dof_local];
-        dolfin_assert(e.index() * num_dofs_per_entity + i < dof_list.size());
+        assert(e.index() * num_dofs_per_entity + i < dof_list.size());
         dof_list[e.index() * num_dofs_per_entity + i] = dof_index;
       }
 
@@ -98,7 +99,7 @@ GenericDofMap::entity_dofs(const mesh::Mesh& mesh, std::size_t entity_dim,
                                                  * dofs_per_entity);
 
   // Allocate data for tabulating local to local map
-  std::vector<std::size_t> local_to_local_map(dofs_per_entity);
+  std::vector<int> local_to_local_map(dofs_per_entity);
 
   // Iterate over entities
   std::size_t local_entity_ind = 0;
@@ -154,7 +155,7 @@ GenericDofMap::entity_dofs(const mesh::Mesh& mesh, std::size_t entity_dim) const
                                                  * dofs_per_entity);
 
   // Allocate data for tabulating local to local map
-  std::vector<std::size_t> local_to_local_map(dofs_per_entity);
+  std::vector<int> local_to_local_map(dofs_per_entity);
 
   // Iterate over entities
   std::size_t local_entity_ind = 0;

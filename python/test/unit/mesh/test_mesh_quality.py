@@ -1,28 +1,12 @@
-"Unit tests for the MeshQuality class"
-
 # Copyright (C) 2013 Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# First added:  2013-10-07
-# Last changed:
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import pytest
-import numpy
-from dolfin import *
+from math import sqrt, pi
+from dolfin import (UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh, MeshQuality, MPI, Cells,
+                    RectangleMesh, Point, CellType, cpp)
 from dolfin_utils.test import skip_in_parallel
 
 
@@ -52,7 +36,7 @@ def test_radius_ratio_triangle_min_max():
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh)
     assert rmax <= rmax
 
-    x = mesh.geometry().x()
+    x = mesh.geometry.points
     x[:, 0] *= 0.0
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh)
     assert round(rmin - 0.0, 7) == 0
@@ -67,42 +51,37 @@ def test_radius_ratio_tetrahedron_min_max():
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh)
     assert rmax <= rmax
 
-    x = mesh.geometry().x()
+    x = mesh.geometry.points
     x[:, 0] *= 0.0
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh)
     assert round(rmax - 0.0, 7) == 0
     assert round(rmax - 0.0, 7) == 0
 
 
-def test_radius_ratio_matplotlib():
-    # Create mesh, collpase and compute min ratio
-    mesh = UnitCubeMesh(MPI.comm_world, 12, 12, 12)
-    test = MeshQuality.radius_ratio_matplotlib_histogram(mesh, 5)
-    print(test)
-
-
 @skip_in_parallel
 def test_radius_ratio_min_radius_ratio_max():
     mesh1d = UnitIntervalMesh(MPI.comm_self, 4)
-    x = mesh1d.geometry().x()
-    x[4] = mesh1d.geometry().x()[3]
+    x = mesh1d.geometry.points
+    x[4] = mesh1d.geometry.points[3]
 
     # Create 2D mesh with one equilateral triangle
-    mesh2d = RectangleMesh.create(MPI.comm_world, [Point(0,0), Point(1,1)], [1, 1], CellType.Type.triangle, 'left')
-    x = mesh2d.geometry().x()
-    x[3] += 0.5*(sqrt(3.0)-1.0)
+    mesh2d = RectangleMesh.create(MPI.comm_world, [Point(0, 0), Point(1, 1)], [
+                                  1, 1], CellType.Type.triangle,
+                                  cpp.mesh.GhostMode.none, 'left')
+    x = mesh2d.geometry.points
+    x[3] += 0.5 * (sqrt(3.0) - 1.0)
 
     # Create 3D mesh with regular tetrahedron and degenerate cells
     mesh3d = UnitCubeMesh(MPI.comm_self, 1, 1, 1)
-    x = mesh3d.geometry().x()
-    x[2][0] = 1.0
-    x[7][1] = 0.0
+    x = mesh3d.geometry.points
+    x[6][0] = 1.0
+    x[3][1] = 0.0
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh1d)
     assert round(rmin - 0.0, 7) == 0
     assert round(rmax - 1.0, 7) == 0
 
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh2d)
-    assert round(rmin - 2.0*sqrt(2.0)/(2.0+sqrt(2.0)), 7) == 0
+    assert round(rmin - 2.0 * sqrt(2.0) / (2.0 + sqrt(2.0)), 7) == 0
     assert round(rmax - 1.0, 7) == 0
 
     rmin, rmax = MeshQuality.radius_ratio_min_max(mesh3d)
@@ -114,12 +93,5 @@ def test_dihedral_angles_min_max():
     # Create 3D mesh with regular tetrahedron
     mesh = UnitCubeMesh(MPI.comm_world, 2, 2, 2)
     dang_min, dang_max = MeshQuality.dihedral_angles_min_max(mesh)
-    assert round(dang_min*(180/numpy.pi) - 45.0) == 0
-    assert round(dang_max*(180/numpy.pi) - 90.0) == 0
-
-
-def test_dihedral_angles_matplotlib():
-    # Create mesh, collpase and compute min ratio
-    mesh = UnitCubeMesh(MPI.comm_world, 12, 12, 12)
-    test = MeshQuality.dihedral_angles_matplotlib_histogram(mesh, 5)
-    print(test)
+    assert round(dang_min * (180 / pi) - 45.0) == 0
+    assert round(dang_max * (180 / pi) - 90.0) == 0

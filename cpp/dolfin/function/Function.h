@@ -6,20 +6,12 @@
 
 #pragma once
 
-#include "FunctionAXPY.h"
 #include "GenericFunction.h"
 #include <Eigen/Dense>
 #include <dolfin/common/types.h>
 #include <memory>
-#include <string>
-#include <utility>
+#include <petscsys.h>
 #include <vector>
-
-namespace ufc
-{
-// Forward declarations
-class cell;
-}
 
 namespace dolfin
 {
@@ -32,7 +24,7 @@ namespace mesh
 {
 class Cell;
 class Mesh;
-}
+} // namespace mesh
 
 namespace function
 {
@@ -86,12 +78,6 @@ public:
   //         Another function.
   // const Function& operator= (const Function& v);
 
-  /// Assignment from linear combination of function
-  ///
-  /// @param axpy (_FunctionAXPY_)
-  ///         A linear combination of other Functions
-  void operator=(const function::FunctionAXPY& axpy);
-
   /// Extract subfunction (view into the Function)
   ///
   /// @param i (std::size_t)
@@ -106,7 +92,7 @@ public:
   ///         Return the shared pointer.
   virtual std::shared_ptr<const FunctionSpace> function_space() const override
   {
-    dolfin_assert(_function_space);
+    assert(_function_space);
     return _function_space;
   }
 
@@ -128,22 +114,10 @@ public:
   ///         The values.
   /// @param    x (Eigen::Ref<const Eigen::VectorXd> x)
   ///         The coordinates.
-  void eval(Eigen::Ref<EigenRowMatrixXd> values,
-            Eigen::Ref<const EigenRowMatrixXd> x) const override;
-
-  /// Evaluate function at given coordinates in given cell
-  ///
-  /// @param    values (Eigen::Ref<Eigen::VectorXd>)
-  ///         The values.
-  /// @param    x (Eigen::Ref<const Eigen::VectorXd>)
-  ///         The coordinates.
-  /// @param    dolfin_cell (_Cell_)
-  ///         The cell.
-  /// @param    ufc_cell (ufc::cell)
-  ///         The ufc::cell.
-  void eval(Eigen::Ref<EigenRowMatrixXd> values,
-            Eigen::Ref<const EigenRowMatrixXd> x, const mesh::Cell& dolfin_cell,
-            const ufc::cell& ufc_cell) const;
+  void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                                    Eigen::RowMajor>>
+                values,
+            Eigen::Ref<const EigenRowArrayXXd> x) const override;
 
   /// Interpolate function (on possibly non-matching meshes)
   ///
@@ -180,48 +154,46 @@ public:
   ///         The values at the point.
   /// @param   x (Eigen::Ref<const Eigen::VectorXd>
   ///         The coordinates of the point.
-  /// @param    cell (ufc::cell)
+  /// @param    cell (mesh::Cell)
   ///         The cell which contains the given point.
-  virtual void eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x,
-                    const ufc::cell& cell) const override;
+  virtual void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                            Eigen::Dynamic, Eigen::RowMajor>>
+                        values,
+                    Eigen::Ref<const EigenRowArrayXXd> x,
+                    const mesh::Cell& cell) const override;
 
   /// Restrict function to local cell (compute expansion coefficients w)
   ///
-  /// @param    w (list of doubles)
+  /// @param    w (list of PetscScalars)
   ///         Expansion coefficients.
   /// @param    element (_FiniteElement_)
   ///         The element.
-  /// @param    dolfin_cell (_Cell_)
+  /// @param    cell (_Cell_)
   ///         The cell.
   /// @param  coordinate_dofs (double *)
   ///         The coordinates
-  /// @param    ufc_cell (ufc::cell).
-  ///         The ufc::cell.
-  virtual void restrict(double* w, const fem::FiniteElement& element,
-                        const mesh::Cell& dolfin_cell,
-                        const double* coordinate_dofs,
-                        const ufc::cell& ufc_cell) const override;
+  virtual void restrict(
+      PetscScalar* w, const fem::FiniteElement& element, const mesh::Cell& cell,
+      const Eigen::Ref<const EigenRowArrayXXd>& coordinate_dofs) const override;
 
-  /// Compute values at all mesh vertices
+  /// Compute values at all mesh points
   ///
   /// @param    mesh (_mesh::Mesh_)
   ///         The mesh.
-  /// @returns  vertex_values (EigenRowArrayXXd)
-  ///         The values at all vertices.
-  virtual EigenRowArrayXXd
-  compute_vertex_values(const mesh::Mesh& mesh) const override;
+  /// @returns  point_values (EigenRowArrayXXd)
+  ///         The values at all geometric points
+  virtual Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                       Eigen::RowMajor>
+  compute_point_values(const mesh::Mesh& mesh) const override;
 
-  /// Compute values at all mesh vertices
+  /// Compute values at all mesh points
   ///
-  /// @returns    vertex_values (EigenRowArrayXXd)
-  ///         The values at all vertices.
-  EigenRowArrayXXd compute_vertex_values() const;
+  /// @returns    point_values (EigenRowArrayXXd)
+  ///         The values at all geometric points
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+  compute_point_values() const;
 
 private:
-  // Friends
-  friend class FunctionAssigner;
-
   // Initialize vector
   void init_vector();
 
@@ -231,5 +203,5 @@ private:
   // The vector of expansion coefficients (local)
   std::shared_ptr<la::PETScVector> _vector;
 };
-}
-}
+} // namespace function
+} // namespace dolfin

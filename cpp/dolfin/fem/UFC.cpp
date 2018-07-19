@@ -59,10 +59,10 @@ UFC::UFC(const Form& a) : dolfin_form(a)
   }
 }
 //-----------------------------------------------------------------------------
-void UFC::update(const mesh::Cell& c,
-                 Eigen::Ref<const dolfin::EigenRowArrayXXd> coordinate_dofs,
-                 const ufc::cell& ufc_cell,
-                 const std::vector<bool>& enabled_coefficients)
+void UFC::update(
+    const mesh::Cell& c,
+    const Eigen::Ref<const dolfin::EigenRowArrayXXd>& coordinate_dofs,
+    const bool* enabled_coefficients)
 {
   const auto& coefficients = dolfin_form.coeffs();
 
@@ -73,36 +73,16 @@ void UFC::update(const mesh::Cell& c,
       continue;
     const auto coefficient = coefficients.get(i);
     const auto& element = coefficients.element(i);
-    coefficient->restrict(w_pointer[i], element, c, coordinate_dofs.data(),
-                          ufc_cell);
+    coefficient->restrict(w_pointer[i], element, c, coordinate_dofs);
   }
 }
 //-----------------------------------------------------------------------------
-void UFC::update(const mesh::Cell& c,
-                 const std::vector<double>& coordinate_dofs,
-                 const ufc::cell& ufc_cell,
-                 const std::vector<bool>& enabled_coefficients)
-{
-  const auto& coefficients = dolfin_form.coeffs();
-
-  // Restrict coefficients to cell
-  for (std::size_t i = 0; i < coefficients.size(); ++i)
-  {
-    if (!enabled_coefficients[i])
-      continue;
-    const auto coefficient = coefficients.get(i);
-    const auto& element = coefficients.element(i);
-    coefficient->restrict(w_pointer[i], element, c, coordinate_dofs.data(),
-                          ufc_cell);
-  }
-}
-//-----------------------------------------------------------------------------
-void UFC::update(const mesh::Cell& c0,
-                 const std::vector<double>& coordinate_dofs0,
-                 const ufc::cell& ufc_cell0, const mesh::Cell& c1,
-                 const std::vector<double>& coordinate_dofs1,
-                 const ufc::cell& ufc_cell1,
-                 const std::vector<bool>& enabled_coefficients)
+void UFC::update(
+    const mesh::Cell& c0,
+    const Eigen::Ref<const dolfin::EigenRowArrayXXd>& coordinate_dofs0,
+    const mesh::Cell& c1,
+    const Eigen::Ref<const dolfin::EigenRowArrayXXd>& coordinate_dofs1,
+    const bool* enabled_coefficients)
 {
   const auto& coefficients = dolfin_form.coeffs();
 
@@ -114,34 +94,9 @@ void UFC::update(const mesh::Cell& c0,
     const auto coefficient = coefficients.get(i);
     const auto& element = coefficients.element(i);
     const std::size_t offset = element.space_dimension();
-    coefficient->restrict(macro_w_pointer[i], element, c0,
-                          coordinate_dofs0.data(), ufc_cell0);
+    coefficient->restrict(macro_w_pointer[i], element, c0, coordinate_dofs0);
     coefficient->restrict(macro_w_pointer[i] + offset, element, c1,
-                          coordinate_dofs1.data(), ufc_cell1);
-  }
-}
-//-----------------------------------------------------------------------------
-void UFC::update(const mesh::Cell& c0,
-                 Eigen::Ref<const dolfin::EigenRowArrayXXd> coordinate_dofs0,
-                 const ufc::cell& ufc_cell0, const mesh::Cell& c1,
-                 Eigen::Ref<const dolfin::EigenRowArrayXXd> coordinate_dofs1,
-                 const ufc::cell& ufc_cell1,
-                 const std::vector<bool>& enabled_coefficients)
-{
-  const auto& coefficients = dolfin_form.coeffs();
-
-  // Restrict coefficients to facet
-  for (std::size_t i = 0; i < coefficients.size(); ++i)
-  {
-    if (!enabled_coefficients[i])
-      continue;
-    const auto coefficient = coefficients.get(i);
-    const auto& element = coefficients.element(i);
-    const std::size_t offset = element.space_dimension();
-    coefficient->restrict(macro_w_pointer[i], element, c0,
-                          coordinate_dofs0.data(), ufc_cell0);
-    coefficient->restrict(macro_w_pointer[i] + offset, element, c1,
-                          coordinate_dofs1.data(), ufc_cell1);
+                          coordinate_dofs1);
   }
 }
 //-----------------------------------------------------------------------------

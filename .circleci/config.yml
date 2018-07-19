@@ -3,22 +3,23 @@ jobs:
   build:
     docker:
       - image: quay.io/fenicsproject/dolfinx:latest
+    environment:
+      MPLBACKEND: "agg"
+      DOLFIN_NOPLOT: 1
+      DEBIAN_FRONTEND: "noninteractive"
     steps:
       - checkout
       - run:
-          name: Install/update apt dependencies
-          command: apt-get -y update && apt-get -y install python3-tk
-      - run:
-          name: Install/update Python dependencies
-          command: pip3 install flake8 matplotlib pytest pytest-xdist sphinx sphinx_rtd_theme --upgrade
+          name: Install/update Python (test/doc) dependencies
+          command: pip3 install decorator flake8 matplotlib numba pygmsh pytest pytest-xdist sphinx sphinx_rtd_theme --upgrade
       - run:
           name: Install FEniCS Python components
           command: |
             pip3 uninstall --yes fenics-fiat fenics-ufl fenics-dijitso fenics-ffc
-            pip3 install git+https://bitbucket.org/fenics-project/fiat.git
-            pip3 install git+https://bitbucket.org/fenics-project/ufl.git
-            pip3 install git+https://bitbucket.org/fenics-project/dijitso.git
-            pip3 install git+https://bitbucket.org/fenics-project/ffcX.git
+            pip3 install git+https://bitbucket.org/fenics-project/fiat.git --upgrade
+            pip3 install git+https://bitbucket.org/fenics-project/ufl.git --upgrade
+            pip3 install git+https://bitbucket.org/fenics-project/dijitso.git --upgrade
+            pip3 install git+https://github.com/fenics/ffcx.git --upgrade
             rm -rf /usr/local/include/dolfin /usr/local/include/dolfin.h
       - run:
           name: Flake8 checks on Python code
@@ -29,13 +30,13 @@ jobs:
           command: cd cpp/doc && doxygen
       - run:
           name: Configure DOLFIN (C++)
-          command: mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Developer ../cpp/
+          command: mkdir -p build && cd build && cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer ../cpp/
       - run:
           name: Build DOLFIN and install (C++)
-          command: cd build && make -j2 install
+          command: cd build && ninja -j3 install
       - run:
           name: Build and run C++ unit tests (serial)
-          command: cd build && make -j2 unittests && ctest -R unittests
+          command: cd build && ninja -j3 unittests && ctest -R unittests
       #- run:
       #    name: Build and run C++ regressions tests (serial)
       #    command: cd build && make -j2 demos && ctest -j2 -R demo -R serial
@@ -48,8 +49,8 @@ jobs:
           command: |
             cd cpp/demo/documented/poisson
             python3 -m ffc -l dolfin Poisson.ufl
-            cmake .
-            make
+            cmake -G Ninja .
+            ninja
             ./demo_poisson
 
       - run:
@@ -60,7 +61,9 @@ jobs:
 
       - run:
           name: Build DOLFIN Python documentation
-          command: cd python/doc && make html
+          command: |
+            cd python/demo && python3 ./generate-demo-files.py
+            cd ../doc && make html
       - persist_to_workspace:
           root: .
           paths:
@@ -68,27 +71,38 @@ jobs:
             - cpp/doc/html/
 
       - run:
-          name: Run Python unit tests
+          name: Run flake8 on Python unit tests
           command: |
-            cd python/test
-            python3 -m pytest unit/fem/test_assembler.py
-            python3 -m pytest unit/function
-            python3 -m pytest unit/geometry/test_bounding_box_tree.py
-            python3 -m pytest unit/io
-            python3 -m pytest unit/jit
-            mpirun -n 3 python3 -m pytest unit/io
-            python3 -m pytest unit/la/test_sparsity_pattern.py
-            mpirun -n 3 python3 -m pytest unit/la/test_sparsity_pattern.py
-            python3 -m pytest unit/mesh
-
+            cd python/test/unit
+            python3 -m flake8 .
+      - run:
+          name: Run Python unit tests (serial)
+          command: |
+            cd python/test/unit
+            python3 -m pytest -n 3 .
+      - run:
+          name: Run Python unit tests (MPI)
+          command: |
+            cd python/test/unit
+            mpirun --allow-run-as-root -n 3 python3 -m pytest .
       - run:
           name: Run Python demos (serial)
           command: |
             cd python/demo
-            export DOLFIN_NOPLOT=1
             python3 ./generate-demo-files.py
             python3 undocumented/elasticity/demo_elasticity.py
             python3 documented/poisson/demo_poisson.py
+            cd documented/stokes-taylor-hood
+            python3 demo_stokes-taylor-hood.py
+
+      - run:
+          name: Run Python demos (MPI)
+          command: |
+            cd python/demo
+            mpirun --allow-run-as-root -np 3 python3 documented/poisson/demo_poisson.py
+            mpirun --allow-run-as-root -np 3 python3 undocumented/elasticity/demo_elasticity.py
+            cd documented/stokes-taylor-hood
+            mpirun --allow-run-as-root -np 3 python3 demo_stokes-taylor-hood.py
 
       #- run:
       #    name: Run Python unit tests (serial)

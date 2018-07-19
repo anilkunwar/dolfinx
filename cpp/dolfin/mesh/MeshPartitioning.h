@@ -7,13 +7,14 @@
 #pragma once
 
 #include "DistributedMeshTools.h"
-#include "LocalMeshValueCollection.h"
 #include "Mesh.h"
-#include <boost/multi_array.hpp>
+#include "PartitionData.h"
 #include <cstdint>
 #include <dolfin/common/Set.h>
+#include <dolfin/common/types.h>
 #include <dolfin/log/log.h>
 #include <map>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -31,8 +32,15 @@ template <typename T>
 class MeshFunction;
 template <typename T>
 class MeshValueCollection;
-class LocalMeshData;
 class CellType;
+
+/// Enum for different partitioning ghost modes
+enum class GhostMode : int
+{
+  none,
+  shared_facet,
+  shared_vertex
+};
 
 /// This class partitions and distributes a mesh based on
 /// partitioned local mesh data.The local mesh data will also be
@@ -45,133 +53,142 @@ class CellType;
 class MeshPartitioning
 {
 public:
-  /// Build a distributed mesh from a local mesh on process 0
-  static mesh::Mesh build_distributed_mesh(const Mesh& mesh);
-
-  /// Build a distributed mesh from a local mesh on process 0, with
-  /// distribution of cells supplied (destination processes for each
-  /// cell)
+  /// Build distributed mesh from a set of points and cells on each local
+  /// process
+  /// @param comm
+  ///     MPI Communicator
+  /// @param type
+  ///     Cell type
+  /// @param points
+  ///     Geometric points on each process, numbered from process 0 upwards.
+  /// @param cells
+  ///     Topological cells with global vertex indexing. Each cell appears once
+  ///     only.
+  /// @param global_cell_indices
+  ///     Global index for each cell
+  /// @param ghost_mode
+  ///     Ghost mode
   static mesh::Mesh
-  build_distributed_mesh(const Mesh& mesh,
-                         const std::vector<int>& cell_partition,
-                         const std::string ghost_mode);
+  build_distributed_mesh(const MPI_Comm& comm, mesh::CellType::Type type,
+                         const Eigen::Ref<const EigenRowArrayXXd>& points,
+                         const Eigen::Ref<const EigenRowArrayXXi64>& cells,
+                         const std::vector<std::int64_t>& global_cell_indices,
+                         const mesh::GhostMode ghost_mode);
 
-  /// Build a distributed mesh from 'local mesh data' that is
-  /// distributed across processes
-  static mesh::Mesh build_distributed_mesh(const LocalMeshData& data,
-                                           const std::string ghost_mode);
+  /// Redistribute points to the processes that need them.
+  /// @param mpi_comm
+  ///   MPI Communicator
+  /// @param points
+  ///   Existing vertex coordinates array on each process before
+  ///   distribution
+  /// @param global_point_indices
+  ///   Global indices for vertices required on this process
+  /// @return
+  ///   vertex_coordinates (array of coordinates on this process after
+  ///   distribution) and shared_vertices_local (map from local index to set of
+  ///   sharing processes for each shared vertex)
+  static std::pair<EigenRowArrayXXd,
+                   std::map<std::int32_t, std::set<std::uint32_t>>>
+  distribute_points(const MPI_Comm mpi_comm,
+                    const Eigen::Ref<const EigenRowArrayXXd>& points,
+                    const std::vector<std::int64_t>& global_point_indices);
+
+  /// Compute mapping of globally indexed vertices to local indices
+  /// and remap topology accordingly
+  ///
+  /// @param mpi_comm
+  ///   MPI Communicator
+  /// @param cell_vertices
+  ///   Input cell topology (global indexing)
+  /// @param cell_permutation
+  ///   Permutation from VTK to DOLFIN index ordering
+  /// @return
+  ///   Local-to-global map for vertices (std::vector<std::int64_t>) and cell
+  ///   topology in local indexing (EigenRowArrayXXi32)
+  static std::tuple<std::uint64_t, std::vector<std::int64_t>,
+                    EigenRowArrayXXi32>
+  compute_point_mapping(std::uint32_t num_cell_vertices,
+                        const Eigen::Ref<const EigenRowArrayXXi64>& cell_points,
+                        const std::vector<std::uint8_t>& cell_permutation);
+
+  // Utility to create global vertex indices, needed for higher
+  // order meshes, where there are geometric points which are not
+  // at the vertex nodes
+  static std::pair<std::int64_t, std::vector<std::int64_t>>
+  build_global_vertex_indices(
+      MPI_Comm mpi_comm, std::uint32_t num_vertices,
+      const std::vector<std::int64_t>& global_point_indices,
+      const std::map<std::int32_t, std::set<std::uint32_t>>& shared_points);
 
 private:
   // Compute cell partitioning from local mesh data. Returns a
-  // vector 'cell -> process' vector for cells in LocalMeshData, and
+  // vector 'cell -> process' vector for cells, and
   // a map 'local cell index -> processes' to which ghost cells must
   // be sent
-  static void
-  partition_cells(const MPI_Comm& mpi_comm, const LocalMeshData& mesh_data,
-                  const std::string partitioner,
-                  std::vector<int>& cell_partition,
-                  std::map<std::int64_t, std::vector<int>>& ghost_procs);
+  static PartitionData
+  partition_cells(const MPI_Comm& mpi_comm, mesh::CellType::Type cell_type,
+                  const Eigen::Ref<const EigenRowArrayXXi64>& cell_vertices,
+                  const std::string partitioner);
 
   // Build a distributed mesh from local mesh data with a computed
   // partition
-  static void build(Mesh& mesh, const LocalMeshData& data,
-                    const std::vector<int>& cell_partition,
-                    const std::map<std::int64_t, std::vector<int>>& ghost_procs,
-                    const std::string ghost_mode);
+  static mesh::Mesh build(const MPI_Comm& comm, mesh::CellType::Type type,
+                          const Eigen::Ref<const EigenRowArrayXXi64>& cells,
+                          const Eigen::Ref<const EigenRowArrayXXd>& points,
+                          const std::vector<std::int64_t>& global_cell_indices,
+                          const mesh::GhostMode ghost_mode,
+                          const PartitionData& mp);
 
-  // FIXME: Improve this docstring
-  // Distribute a layer of cells attached by vertex to boundary updating
-  // new_mesh_data and shared_cells. Used when ghosting by vertex.
+  // Distribute additional cells implied by connectivity via vertex. The input
+  // cell_vertices, shared_cells, global_cell_indices and cell_partition must
+  // already be distributed with a ghost layer by shared_facet.
+  // FIXME: shared_cells, cell_vertices, global_cell_indices and cell_partition
+  // are all modified by this function.
   static void distribute_cell_layer(
       MPI_Comm mpi_comm, const int num_regular_cells,
-      const std::int64_t num_global_vertices,
       std::map<std::int32_t, std::set<std::uint32_t>>& shared_cells,
-      boost::multi_array<std::int64_t, 2>& cell_vertices,
+      EigenRowArrayXXi64& cell_vertices,
       std::vector<std::int64_t>& global_cell_indices,
       std::vector<int>& cell_partition);
 
   // FIXME: make clearer what goes in and what comes out
   // Reorder cells by Gibbs-Poole-Stockmeyer algorithm (via SCOTCH). Returns
-  // the tuple (new_shared_cells, new_cell_vertices,new_global_cell_indices).
-  static void reorder_cells_gps(
+  // the tuple (reordered_shared_cells, reordered_cell_vertices,
+  // reordered_global_cell_indices)
+  static std::tuple<std::map<std::int32_t, std::set<std::uint32_t>>,
+                    EigenRowArrayXXi64, std::vector<std::int64_t>>
+  reorder_cells_gps(
       MPI_Comm mpi_comm, const std::uint32_t num_regular_cells,
       const mesh::CellType& cell_type,
       const std::map<std::int32_t, std::set<std::uint32_t>>& shared_cells,
-      const boost::multi_array<std::int64_t, 2>& cell_vertices,
-      const std::vector<std::int64_t>& global_cell_indices,
-      std::map<std::int32_t, std::set<std::uint32_t>>& reordered_shared_cells,
-      boost::multi_array<std::int64_t, 2>& reordered_cell_vertices,
-      std::vector<std::int64_t>& reordered_global_cell_indices);
-
-  // FIXME: make clearer what goes in and what comes out
-  // Reorder vertices by Gibbs-Poole-Stockmeyer algorithm (via SCOTCH).
-  // Returns the pair (new_vertex_indices, new_vertex_global_to_local).
-  static void reorder_vertices_gps(
-      MPI_Comm mpi_comm, const std::int32_t num_regular_vertices,
-      const std::int32_t num_regular_cells, const int num_cell_vertices,
-      const boost::multi_array<std::int64_t, 2>& cell_vertices,
-      const std::vector<std::int64_t>& vertex_indices,
-      const std::map<std::int64_t, std::int32_t>& vertex_global_to_local,
-      std::vector<std::int64_t>& reordered_vertex_indices,
-      std::map<std::int64_t, std::int32_t>& reordered_vertex_global_to_local);
+      const Eigen::Ref<const EigenRowArrayXXi64>& global_cell_vertices,
+      const std::vector<std::int64_t>& global_cell_indices);
 
   // FIXME: Update, making clear exactly what is computed
   // This function takes the partition computed by the partitioner
-  // (which tells us to which process each of the local cells stored in
-  // LocalMeshData on this process belongs) and sends the cells
+  // (which tells us to which process each of the local cells stored on
+  //  this process belongs) and sends the cells
   // to the appropriate owning process. Ghost cells are also sent,
   // along with the list of sharing processes.
-  // A new LocalMeshData object is populated with the redistributed
-  // cells. Return the number of non-ghost cells on this process.
-  static std::int32_t distribute_cells(
-      const MPI_Comm mpi_comm, const LocalMeshData& data,
-      const std::vector<int>& cell_partition,
-      const std::map<std::int64_t, std::vector<int>>& ghost_procs,
-      boost::multi_array<std::int64_t, 2>& new_cell_vertices,
-      std::vector<std::int64_t>& new_global_cell_indices,
-      std::vector<int>& new_cell_partition,
-      std::map<std::int32_t, std::set<std::uint32_t>>& shared_cells);
+  // Returns (new_cell_vertices, new_global_cell_indices,
+  // new_cell_partition, shared_cells, number of non-ghost cells on this
+  // process).
+  static std::tuple<
+      EigenRowArrayXXi64, std::vector<std::int64_t>, std::vector<int>,
+      std::map<std::int32_t, std::set<std::uint32_t>>, std::int32_t>
+  distribute_cells(const MPI_Comm mpi_comm,
+                   const Eigen::Ref<const EigenRowArrayXXi64>& cell_vertices,
+                   const std::vector<std::int64_t>& global_cell_indices,
+                   const PartitionData& mp);
 
-  // FIXME: Improve explaination
-  // Utility to convert received_vertex_indices into
-  // vertex sharing information
-  static void build_shared_vertices(
+  // FIXME: Improve explanation
+  // Utility to convert received_point_indices into
+  // point sharing information
+  static std::map<std::int32_t, std::set<std::uint32_t>> build_shared_points(
       MPI_Comm mpi_comm,
-      std::map<std::int32_t, std::set<std::uint32_t>>& shared_vertices,
-      const std::map<std::int64_t, std::int32_t>&
-          vertex_global_to_local_indices,
-      const std::vector<std::vector<std::size_t>>& received_vertex_indices);
-
-  // FIXME: make clear what is computed
-  // Distribute vertices and vertex sharing information
-  static void distribute_vertices(
-      const MPI_Comm mpi_comm, const LocalMeshData& mesh_data,
-      const std::vector<std::int64_t>& vertex_indices,
-      boost::multi_array<double, 2>& new_vertex_coordinates,
-      std::map<std::int64_t, std::int32_t>& vertex_global_to_local_indices,
-      std::map<std::int32_t, std::set<std::uint32_t>>& shared_vertices_local);
-
-  // Compute the local->global and global->local maps for all local vertices
-  // on this process, from the global vertex indices on each local cell.
-  // Returns the number of regular (non-ghosted) vertices.
-  static std::int32_t compute_vertex_mapping(
-      MPI_Comm mpi_comm, const std::int32_t num_regular_cells,
-      const boost::multi_array<std::int64_t, 2>& cell_vertices,
-      std::vector<std::int64_t>& vertex_indices,
-      std::map<std::int64_t, std::int32_t>& vertex_global_to_local);
-
-  // FIXME: Improve pre-conditions explaination
-  // Build mesh
-  static void build_local_mesh(
-      Mesh& mesh, const std::vector<std::int64_t>& global_cell_indices,
-      const boost::multi_array<std::int64_t, 2>& cell_global_vertices,
-      const mesh::CellType::Type cell_type, const int tdim,
-      const std::int64_t num_global_cells,
-      const std::vector<std::int64_t>& vertex_indices,
-      const boost::multi_array<double, 2>& vertex_coordinates, const int gdim,
-      const std::int64_t num_global_vertices,
-      const std::map<std::int64_t, std::int32_t>&
-          vertex_global_to_local_indices);
+      const std::vector<std::vector<std::size_t>>& received_point_indices,
+      const std::pair<std::size_t, std::size_t> local_point_range,
+      const std::vector<std::vector<std::uint32_t>>& local_indexing);
 };
-}
-}
+} // namespace mesh
+} // namespace dolfin

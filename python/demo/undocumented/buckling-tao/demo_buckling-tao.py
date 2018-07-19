@@ -8,31 +8,14 @@ upwards (and not downwards) in order to minimise the potential energy."""
 
 # Copyright (C) 2014 Tianyi Li
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# First added:  2014-07-19
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 
 from dolfin import *
 import matplotlib.pyplot as plt
 
-
-if not has_petsc():
-    print("DOLFIN must be compiled at least with PETSc 3.6 to run this demo.")
-    exit(0)
 
 # Read mesh and refine once
 mesh = Mesh("../buckling.xml.gz")
@@ -50,7 +33,7 @@ mu = Constant(E/(2.0*(1.0+nu)))
 lmbda = Constant(E*nu/((1.0+nu)*(1.0-2.0*nu)))
 
 # Compressible neo-Hookean model
-I = Identity(mesh.geometry().dim())
+I = Identity(mesh.geometry.dim)
 F = I + grad(u)
 C = F.T*F
 Ic = tr(C)
@@ -74,7 +57,7 @@ class Left(SubDomain):
 class Right(SubDomain):
     def inside(self, x, on_boundary):
         return on_boundary and near(x[0], 10)
-boundaries = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
+boundaries = MeshFunction("size_t", mesh, mesh.topology.dim-1)
 boundaries.set_all(0)
 left = Left()
 left.mark(boundaries, 1)

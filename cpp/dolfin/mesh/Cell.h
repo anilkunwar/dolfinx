@@ -14,7 +14,6 @@
 #include <dolfin/common/types.h>
 #include <dolfin/geometry/Point.h>
 #include <memory>
-#include <ufc.h>
 
 namespace dolfin
 {
@@ -33,7 +32,7 @@ public:
   /// @param    index
   ///         The index.
   Cell(const Mesh& mesh, std::size_t index)
-      : MeshEntity(mesh, mesh.topology().dim(), index)
+      : MeshEntity(mesh, mesh.topology().dim(), index), local_facet(-1)
   {
   }
 
@@ -196,100 +195,27 @@ public:
     return _mesh->type().facet_area(*this, facet);
   }
 
-  /// Order entities locally
-  ///
-  /// @param    local_to_global_vertex_indices
-  ///         The global vertex indices.
-  void order(const std::vector<std::int64_t>& local_to_global_vertex_indices)
-  {
-    _mesh->type().order(*this, local_to_global_vertex_indices);
-  }
+  /// Note: This is a (likely temporary) replacement for ufc::cell::local_facet
+  /// Local facet index, used typically in eval functions
+  mutable int local_facet;
 
-  /// Check if entities are ordered
-  ///
-  ///  @param    local_to_global_vertex_indices
-  ///         The global vertex indices.
-  ///
-  /// @return     bool
-  ///         True iff ordered.
-  bool
-  ordered(const std::vector<std::int64_t>& local_to_global_vertex_indices) const
-  {
-    return _mesh->type().ordered(*this, local_to_global_vertex_indices);
-  }
-
-  // FIXME: This function is part of a UFC transition
+  // FIXME: Update for higher-order geometries
   /// Get cell coordinate dofs (not vertex coordinates)
-  void get_coordinate_dofs(Eigen::Ref<EigenRowArrayXXd> coordinates) const
+  void get_coordinate_dofs(EigenRowArrayXXd& coordinates) const
   {
     const MeshGeometry& geom = _mesh->geometry();
+    const std::uint32_t tdim = _mesh->topology().dim();
+    const MeshConnectivity& conn = _mesh->coordinate_dofs().entity_points(tdim);
+    const std::size_t ndofs = conn.size(_local_index);
+    const std::int32_t* dofs = conn(_local_index);
+
+    const EigenRowArrayXXd& x = geom.points();
     const std::size_t gdim = geom.dim();
-    const std::size_t geom_degree = geom.degree();
-    const std::size_t num_vertices = this->num_vertices();
-    const std::int32_t* vertices = this->entities(0);
 
-    if (geom_degree == 1)
-    {
-      coordinates.resize(num_vertices, gdim);
-      for (std::size_t i = 0; i < num_vertices; ++i)
-      {
-        const double* x = geom.x(vertices[i]);
-        for (std::size_t j = 0; j < gdim; ++j)
-          coordinates(i, j) = x[j];
-      }
-    }
-    else
-      throw std::runtime_error(
-          "Cannot get coordinate_dofs. Unsupported mesh degree");
-  }
-
-  // FIXME: This function is part of a UFC transition
-  /// Get cell coordinate dofs (not vertex coordinates)
-  void get_coordinate_dofs(std::vector<double>& coordinates) const
-  {
-    const MeshGeometry& geom = _mesh->geometry();
-    const std::size_t gdim = geom.dim();
-    const std::size_t geom_degree = geom.degree();
-    const std::size_t num_vertices = this->num_vertices();
-    const std::int32_t* vertices = this->entities(0);
-
-    if (geom_degree == 1)
-    {
-      coordinates.resize(num_vertices * gdim);
-      for (std::size_t i = 0; i < num_vertices; ++i)
-        for (std::size_t j = 0; j < gdim; ++j)
-          coordinates[i * gdim + j] = geom.x(vertices[i])[j];
-    }
-    else
-    {
-      log::dolfin_error("Cell.h", "get coordinate_dofs",
-                        "Unsupported mesh degree");
-    }
-  }
-
-  // FIXME: This function is part of a UFC transition
-  /// Get cell vertex coordinates (not coordinate dofs)
-  void get_vertex_coordinates(std::vector<double>& coordinates) const
-  {
-    const std::size_t gdim = _mesh->geometry().dim();
-    const std::size_t num_vertices = this->num_vertices();
-    const std::int32_t* vertices = this->entities(0);
-    coordinates.resize(num_vertices * gdim);
-    for (std::size_t i = 0; i < num_vertices; i++)
-      for (std::size_t j = 0; j < gdim; j++)
-        coordinates[i * gdim + j] = _mesh->geometry().x(vertices[i])[j];
-  }
-
-  // FIXME: This function is part of a UFC transition
-  /// Fill UFC cell with miscellaneous data
-  void get_cell_data(ufc::cell& ufc_cell, int local_facet = -1) const
-  {
-    ufc_cell.geometric_dimension = _mesh->geometry().dim();
-    ufc_cell.local_facet = local_facet;
-    ufc_cell.orientation = -1;
-    ufc_cell.mesh_identifier = this->mesh().id();
-    ufc_cell.index = index();
+    coordinates.resize(ndofs, gdim);
+    for (unsigned int i = 0; i < ndofs; ++i)
+      coordinates.row(i) = x.row(dofs[i]);
   }
 };
-}
-}
+} // namespace mesh
+} // namespace dolfin

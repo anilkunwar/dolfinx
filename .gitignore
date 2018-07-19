@@ -47,28 +47,32 @@ DOLFINConfigVersion.cmake
 UseDOLFIN.cmake
 dolfin-config-version.cmake
 
-# Demos and tests
+# Demos
 build_demo.*
 test_*_tempdir
-/cpp/test/unit/cpp/mesh/*.{xml,m}
-/cpp/test/unit/cpp/parameter/*.{xml,xml.gz}
 /python/demo/**/*.py
 /python/demo/**/*.xml
 /python/demo/undocumented/mesh-quality/mesh-quality.pdf
 /cpp/demo/**/*.ufl
 /cpp/demo/**/*.cpp
-/cpp/test/unit/cpp/**/*.xml
+/cpp/demo/**/*.c
+
+# Tests
 /python/test/unit/**/*.xml
-/cpp/test/unit/cpp/function/Projection.h
-/cpp/test/unit/cpp/la/forms/ReactionDiffusion.h
-/cpp/test/unit/cpp/la/forms/ReactionDiffusionAction.h
-/cpp/test/unit/cpp/multimesh/MultiMeshStokes2D.h
+/cpp/test/unit/mesh/*.{xml,m}
+/cpp/test/unit/parameter/*.{xml,xml.gz}
+/cpp/test/unit/**/*.xml
+/cpp/test/unit/**/*.c
+/cpp/test/unit/function/Projection.h
+/cpp/test/unit/la/forms/ReactionDiffusion.h
+/cpp/test/unit/la/forms/ReactionDiffusionAction.h
+
 .cache
 
 # FFC generated demo files
 cpp/demo/**/**/*.h
-cpp/demo/documented/cahn-hilliard/cpp/CahnHilliard2D.cpp
-cpp/demo/documented/cahn-hilliard/cpp/CahnHilliard3D.cpp
+cpp/demo/documented/cahn-hilliard/CahnHilliard2D.cpp
+cpp/demo/documented/cahn-hilliard/CahnHilliard3D.cpp
 
 # Temporaries
 *~
@@ -123,3 +127,5 @@ cmake.local
 build/
 
 .vscode
+*.egg-info
+.pytest_cache

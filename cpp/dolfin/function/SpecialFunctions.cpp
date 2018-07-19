@@ -18,13 +18,14 @@ MeshCoordinates::MeshCoordinates(std::shared_ptr<const mesh::Mesh> mesh)
   // Do nothing
 }
 //-----------------------------------------------------------------------------
-void MeshCoordinates::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                           Eigen::Ref<const EigenRowMatrixXd> x,
-                           const ufc::cell& cell) const
+void MeshCoordinates::eval(
+    Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                            Eigen::RowMajor>>
+        values,
+    Eigen::Ref<const EigenRowArrayXXd> x, const mesh::Cell& cell) const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(cell.geometric_dimension == _mesh->geometry().dim());
-  dolfin_assert((unsigned int)x.cols() == _mesh->geometry().dim());
+  assert(_mesh);
+  assert((unsigned int)x.cols() == _mesh->geometry().dim());
 
   values = x;
 }
@@ -35,20 +36,18 @@ FacetArea::FacetArea(std::shared_ptr<const mesh::Mesh> mesh)
   // Do nothing
 }
 //-----------------------------------------------------------------------------
-void FacetArea::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                     Eigen::Ref<const EigenRowMatrixXd> x,
-                     const ufc::cell& cell) const
+void FacetArea::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                             Eigen::Dynamic, Eigen::RowMajor>>
+                         values,
+                     Eigen::Ref<const EigenRowArrayXXd> x,
+                     const mesh::Cell& cell) const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(cell.geometric_dimension == _mesh->geometry().dim());
+  assert(_mesh);
 
   for (unsigned int i = 0; i != x.rows(); ++i)
   {
     if (cell.local_facet >= 0)
-    {
-      mesh::Cell c(*_mesh, cell.index);
-      values(i, 0) = c.facet_area(cell.local_facet);
-    }
+      values(i, 0) = cell.facet_area(cell.local_facet);
     else
     {
       // not_on_boundary

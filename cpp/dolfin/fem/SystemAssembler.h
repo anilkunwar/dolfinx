@@ -15,16 +15,9 @@
 #include <utility>
 #include <vector>
 
-namespace ufc
-{
-class cell;
-class cell_integral;
-class exterior_facet_integral;
-class interior_facet_integral;
-}
-
-using EigenRowMatrixXd
-    = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+struct ufc_cell_integral;
+struct ufc_exterior_facet_integral;
+struct ufc_interior_facet_integral;
 
 namespace dolfin
 {
@@ -32,7 +25,7 @@ namespace la
 {
 class PETScMatrix;
 class PETScVector;
-}
+} // namespace la
 
 namespace common
 {
@@ -52,7 +45,7 @@ class Facet;
 class Mesh;
 template <typename T>
 class MeshFunction;
-}
+} // namespace mesh
 
 namespace fem
 {
@@ -84,7 +77,8 @@ public:
   /// Assemble system (A, b) for (negative) increment dx, where x =
   /// x0 - dx is solution to system a == -L subject to bcs.
   /// Suitable for use inside a (quasi-)Newton solver.
-  void assemble(la::PETScMatrix& A, la::PETScVector& b, const la::PETScVector& x0);
+  void assemble(la::PETScMatrix& A, la::PETScVector& b,
+                const la::PETScVector& x0);
 
   /// Assemble rhs vector b for (negative) increment dx, where x =
   /// x0 - dx is solution to system a == -L subject to bcs.
@@ -98,7 +92,7 @@ private:
   public:
     Scratch(const Form& a, const Form& L);
     ~Scratch();
-    std::array<std::vector<double>, 2> Ae;
+    std::array<std::vector<PetscScalar>, 2> Ae;
   };
 
   // Check form arity
@@ -111,7 +105,8 @@ private:
                              std::size_t bc_index);
 
   // Assemble system
-  void assemble(la::PETScMatrix* A, la::PETScVector* b, const la::PETScVector* x0);
+  void assemble(la::PETScMatrix* A, la::PETScVector* b,
+                const la::PETScVector* x0);
 
   // Bilinear and linear forms
   std::shared_ptr<const Form> _a, _l;
@@ -120,15 +115,17 @@ private:
   std::vector<std::shared_ptr<const DirichletBC>> _bcs;
 
   static void cell_wise_assembly(
-      std::pair<la::PETScMatrix*, la::PETScVector*>& tensors, std::array<UFC*, 2>& ufc,
-      Scratch& data, const std::vector<DirichletBC::Map>& boundary_values,
+      std::pair<la::PETScMatrix*, la::PETScVector*>& tensors,
+      std::array<UFC*, 2>& ufc, Scratch& data,
+      const std::vector<DirichletBC::Map>& boundary_values,
       std::shared_ptr<const mesh::MeshFunction<std::size_t>> cell_domains,
       std::shared_ptr<const mesh::MeshFunction<std::size_t>>
           exterior_facet_domains);
 
   static void facet_wise_assembly(
-      std::pair<la::PETScMatrix*, la::PETScVector*>& tensors, std::array<UFC*, 2>& ufc,
-      Scratch& data, const std::vector<DirichletBC::Map>& boundary_values,
+      std::pair<la::PETScMatrix*, la::PETScVector*>& tensors,
+      std::array<UFC*, 2>& ufc, Scratch& data,
+      const std::vector<DirichletBC::Map>& boundary_values,
       std::shared_ptr<const mesh::MeshFunction<std::size_t>> cell_domains,
       std::shared_ptr<const mesh::MeshFunction<std::size_t>>
           exterior_facet_domains,
@@ -138,27 +135,27 @@ private:
   // Compute exterior facet (and possibly connected cell)
   // contribution
   static void compute_exterior_facet_tensor(
-      std::array<std::vector<double>, 2>& Ae, std::array<UFC*, 2>& ufc,
-      ufc::cell& ufc_cell, Eigen::Ref<EigenRowMatrixXd> coordinate_dofs,
+      std::array<std::vector<PetscScalar>, 2>& Ae, std::array<UFC*, 2>& ufc,
+      EigenRowArrayXXd& coordinate_dofs,
       const std::array<bool, 2>& tensor_required_cell,
       const std::array<bool, 2>& tensor_required_facet, const mesh::Cell& cell,
       const mesh::Facet& facet,
-      const std::array<const ufc::cell_integral*, 2>& cell_integrals,
-      const std::array<const ufc::exterior_facet_integral*, 2>&
+      const std::array<const ufc_cell_integral*, 2>& cell_integrals,
+      const std::array<const ufc_exterior_facet_integral*, 2>&
           exterior_facet_integrals,
       const bool compute_cell_tensor);
 
   // Compute interior facet (and possibly connected cell)
   // contribution
   static void compute_interior_facet_tensor(
-      std::array<UFC*, 2>& ufc, std::array<ufc::cell, 2>& ufc_cell,
-      std::array<EigenRowMatrixXd, 2>& coordinate_dofs,
+      std::array<UFC*, 2>& ufc,
+      std::array<EigenRowArrayXXd, 2>& coordinate_dofs,
       const std::array<bool, 2>& tensor_required_cell,
       const std::array<bool, 2>& tensor_required_facet,
       const std::array<mesh::Cell, 2>& cell,
       const std::array<std::size_t, 2>& local_facet, const bool facet_owner,
-      const std::array<const ufc::cell_integral*, 2>& cell_integrals,
-      const std::array<const ufc::interior_facet_integral*, 2>&
+      const std::array<const ufc_cell_integral*, 2>& cell_integrals,
+      const std::array<const ufc_interior_facet_integral*, 2>&
           interior_facet_integrals,
       const std::array<std::size_t, 2>& matrix_size,
       const std::size_t vector_size,
@@ -167,13 +164,14 @@ private:
   // Modified matrix insertion for case when rhs has facet integrals
   // and lhs has no facet integrals
   static void matrix_block_add(
-      la::PETScMatrix& tensor, std::vector<double>& Ae,
-      std::vector<double>& macro_A, const std::array<bool, 2>& add_local_tensor,
+      la::PETScMatrix& tensor, std::vector<PetscScalar>& Ae,
+      std::vector<PetscScalar>& macro_A,
+      const std::array<bool, 2>& add_local_tensor,
       const std::array<std::vector<common::ArrayView<const la_index_t>>, 2>&
           cell_dofs);
 
   static void
-  apply_bc(double* A, double* b,
+  apply_bc(PetscScalar* A, PetscScalar* b,
            const std::vector<DirichletBC::Map>& boundary_values,
            const common::ArrayView<const dolfin::la_index_t>& global_dofs0,
            const common::ArrayView<const dolfin::la_index_t>& global_dofs1);
@@ -189,5 +187,5 @@ private:
                        const std::vector<DirichletBC::Map>& boundary_values,
                        const common::ArrayView<const dolfin::la_index_t>& dofs);
 };
-}
-}
+} // namespace fem
+} // namespace dolfin

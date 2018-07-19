@@ -7,7 +7,9 @@
 #include "FunctionSpace.h"
 #include "Function.h"
 #include "GenericFunction.h"
+#include <dolfin/common/types.h>
 #include <dolfin/common/utils.h>
+#include <dolfin/fem/CoordinateMapping.h>
 #include <dolfin/fem/FiniteElement.h>
 #include <dolfin/fem/GenericDofMap.h>
 #include <dolfin/la/PETScVector.h>
@@ -94,28 +96,30 @@ std::shared_ptr<const fem::GenericDofMap> FunctionSpace::dofmap() const
 //-----------------------------------------------------------------------------
 std::int64_t FunctionSpace::dim() const
 {
-  dolfin_assert(_dofmap);
+  assert(_dofmap);
   return _dofmap->global_dimension();
 }
 //-----------------------------------------------------------------------------
 void FunctionSpace::interpolate_from_any(
     la::PETScVector& expansion_coefficients, const GenericFunction& v) const
 {
+  assert(_mesh);
+
+  std::size_t gdim = _mesh->geometry().dim();
+
   // Initialize local arrays
-  std::vector<double> cell_coefficients(_dofmap->max_element_dofs());
+  std::vector<PetscScalar> cell_coefficients(_dofmap->max_element_dofs());
 
   // Iterate over mesh and interpolate on each cell
-  ufc::cell ufc_cell;
-  std::vector<double> coordinate_dofs;
+  EigenRowArrayXXd coordinate_dofs;
   for (auto& cell : mesh::MeshRange<mesh::Cell>(*_mesh))
   {
-    // Update to current cell
+    // Get cell coordinate dofs
+    coordinate_dofs.resize(cell.num_vertices(), gdim);
     cell.get_coordinate_dofs(coordinate_dofs);
-    cell.get_cell_data(ufc_cell);
 
     // Restrict function to cell
-    v.restrict(cell_coefficients.data(), *_element, cell,
-               coordinate_dofs.data(), ufc_cell);
+    v.restrict(cell_coefficients.data(), *_element, cell, coordinate_dofs);
 
     // Tabulate dofs
     auto cell_dofs = _dofmap->cell_dofs(cell.index());
@@ -130,9 +134,9 @@ void FunctionSpace::interpolate_from_any(
 void FunctionSpace::interpolate(la::PETScVector& expansion_coefficients,
                                 const GenericFunction& v) const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(_element);
-  dolfin_assert(_dofmap);
+  assert(_mesh);
+  assert(_element);
+  assert(_dofmap);
 
   // Check that function ranks match
   if (_element->value_rank() != v.value_rank())
@@ -148,25 +152,23 @@ void FunctionSpace::interpolate(la::PETScVector& expansion_coefficients,
   {
     if (_element->value_dimension(i) != v.value_dimension(i))
     {
-      log::dolfin_error("FunctionSpace.cpp",
-                   "interpolate function into function space",
-                   "Dimension %d of function (%d) does not match dimension %d "
-                   "of function space (%d)",
-                   i, v.value_dimension(i), i, element()->value_dimension(i));
+      log::dolfin_error(
+          "FunctionSpace.cpp", "interpolate function into function space",
+          "Dimension %d of function (%d) does not match dimension %d "
+          "of function space (%d)",
+          i, v.value_dimension(i), i, element()->value_dimension(i));
     }
   }
 
   // Initialize vector of expansion coefficients
   if (expansion_coefficients.size() != _dofmap->global_dimension())
   {
-    log::dolfin_error("FunctionSpace.cpp",
-                 "interpolate function into function space",
-                 "Wrong size of vector");
+    throw std::runtime_error("Cannot interpolate function into function space. "
+                             "Wrong size of vector");
   }
-  expansion_coefficients.zero();
+  expansion_coefficients.set(0.0);
 
   std::shared_ptr<const FunctionSpace> v_fs = v.function_space();
-
   interpolate_from_any(expansion_coefficients, v);
 
   // Finalise changes
@@ -176,9 +178,9 @@ void FunctionSpace::interpolate(la::PETScVector& expansion_coefficients,
 std::shared_ptr<FunctionSpace>
 FunctionSpace::sub(const std::vector<std::size_t>& component) const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(_element);
-  dolfin_assert(_dofmap);
+  assert(_mesh);
+  assert(_element);
+  assert(_dofmap);
 
   // Check if sub space is already in the cache and not expired
   auto subspace = _subspaces.find(component);
@@ -212,42 +214,38 @@ FunctionSpace::sub(const std::vector<std::size_t>& component) const
   return new_sub_space;
 }
 //-----------------------------------------------------------------------------
-std::shared_ptr<FunctionSpace> FunctionSpace::collapse() const
+std::pair<std::shared_ptr<FunctionSpace>,
+          std::unordered_map<std::size_t, std::size_t>>
+FunctionSpace::collapse() const
 {
-  std::unordered_map<std::size_t, std::size_t> collapsed_dofs;
-  return collapse(collapsed_dofs);
-}
-//-----------------------------------------------------------------------------
-std::shared_ptr<FunctionSpace> FunctionSpace::collapse(
-    std::unordered_map<std::size_t, std::size_t>& collapsed_dofs) const
-{
-  dolfin_assert(_mesh);
-
+  assert(_mesh);
   if (_component.empty())
   {
     log::dolfin_error("FunctionSpace.cpp", "collapse function space",
-                 "Function space is not a subspace");
+                      "Function space is not a subspace");
   }
 
   // Create collapsed DofMap
-  std::shared_ptr<fem::GenericDofMap> collapsed_dofmap(
-      _dofmap->collapse(collapsed_dofs, *_mesh));
+  std::shared_ptr<fem::GenericDofMap> collapsed_dofmap;
+  std::unordered_map<std::size_t, std::size_t> collapsed_dofs;
+  std::tie(collapsed_dofmap, collapsed_dofs) = _dofmap->collapse(*_mesh);
 
   // Create new FunctionSpace and return
-  std::shared_ptr<FunctionSpace> collapsed_sub_space(
-      new FunctionSpace(_mesh, _element, collapsed_dofmap));
-  return collapsed_sub_space;
+  auto collapsed_sub_space
+      = std::make_shared<FunctionSpace>(_mesh, _element, collapsed_dofmap);
+
+  return std::make_pair(std::move(collapsed_sub_space),
+                        std::move(collapsed_dofs));
 }
 //-----------------------------------------------------------------------------
 std::vector<std::size_t> FunctionSpace::component() const { return _component; }
 //-----------------------------------------------------------------------------
-std::vector<double> FunctionSpace::tabulate_dof_coordinates() const
+EigenRowArrayXXd FunctionSpace::tabulate_dof_coordinates() const
 {
   // Geometric dimension
-  dolfin_assert(_mesh);
-  dolfin_assert(_element);
-  const std::size_t gdim = _element->geometric_dimension();
-  dolfin_assert(gdim == _mesh->geometry().dim());
+  assert(_mesh);
+  assert(_element);
+  const std::size_t gdim = _mesh->geometry().dim();
 
   if (!_component.empty())
   {
@@ -257,74 +255,94 @@ std::vector<double> FunctionSpace::tabulate_dof_coordinates() const
   }
 
   // Get local size
-  dolfin_assert(_dofmap);
+  assert(_dofmap);
   std::size_t bs = _dofmap->block_size();
-  std::size_t local_size
-      = bs * _dofmap->index_map()->size(common::IndexMap::MapSize::OWNED);
+  std::size_t local_size = bs * _dofmap->index_map()->size_local();
 
-  // Vector to hold coordinates and return
-  std::vector<double> x(gdim * local_size);
+  // Dof coordinate on reference element
+  const EigenRowArrayXXd& X = _element->dof_reference_coordinates();
+
+  // Arrray to hold coordinates and return
+  EigenRowArrayXXd x(local_size, gdim);
+
+  // Get coordinate mapping
+  if (!_mesh->geometry().coord_mapping)
+  {
+    throw std::runtime_error(
+        "CoordinateMapping has not been attached to mesh.");
+  }
+  const fem::CoordinateMapping& cmap = *_mesh->geometry().coord_mapping;
 
   // Loop over cells and tabulate dofs
-  boost::multi_array<double, 2> coordinates;
-  std::vector<double> coordinate_dofs;
+  EigenRowArrayXXd coordinates(_element->space_dimension(), gdim);
+  EigenRowArrayXXd coordinate_dofs;
   for (auto& cell : mesh::MeshRange<mesh::Cell>(*_mesh))
   {
     // Update UFC cell
+    coordinate_dofs.resize(cell.num_vertices(), gdim);
     cell.get_coordinate_dofs(coordinate_dofs);
 
     // Get local-to-global map
     auto dofs = _dofmap->cell_dofs(cell.index());
 
     // Tabulate dof coordinates on cell
-    _element->tabulate_dof_coordinates(coordinates, coordinate_dofs, cell);
+    cmap.compute_physical_coordinates(coordinates, X, coordinate_dofs);
 
     // Copy dof coordinates into vector
     for (Eigen::Index i = 0; i < dofs.size(); ++i)
     {
       const dolfin::la_index_t dof = dofs[i];
       if (dof < (dolfin::la_index_t)local_size)
-      {
-        const dolfin::la_index_t local_index = dof;
-        for (std::size_t j = 0; j < gdim; ++j)
-        {
-          dolfin_assert(gdim * local_index + j < x.size());
-          x[gdim * local_index + j] = coordinates[i][j];
-        }
-      }
+        x.row(dof) = coordinates.row(i);
     }
   }
 
   return x;
 }
 //-----------------------------------------------------------------------------
-void FunctionSpace::set_x(la::PETScVector& x, double value,
+void FunctionSpace::set_x(la::PETScVector& x, PetscScalar value,
                           std::size_t component) const
 {
-  dolfin_assert(_mesh);
-  dolfin_assert(_dofmap);
-  dolfin_assert(_element);
+  assert(_mesh);
+  assert(_dofmap);
+  assert(_element);
 
-  std::vector<double> x_values;
-  boost::multi_array<double, 2> coordinates;
-  std::vector<double> coordinate_dofs;
+  const std::size_t gdim = _mesh->geometry().dim();
+  std::vector<PetscScalar> x_values;
+
+  // Dof coordinate on reference element
+  const EigenRowArrayXXd& X = _element->dof_reference_coordinates();
+
+  // Get coordinate mapping
+  if (!_mesh->geometry().coord_mapping)
+  {
+    throw std::runtime_error(
+        "CoordinateMapping has not been attached to mesh.");
+  }
+  const fem::CoordinateMapping& cmap = *_mesh->geometry().coord_mapping;
+
+  EigenRowArrayXXd coordinates(_element->space_dimension(),
+                               _mesh->geometry().dim());
+  EigenRowArrayXXd coordinate_dofs;
   for (auto& cell : mesh::MeshRange<mesh::Cell>(*_mesh))
   {
     // Update UFC cell
+    coordinate_dofs.resize(cell.num_vertices(), gdim);
     cell.get_coordinate_dofs(coordinate_dofs);
 
     // Get cell local-to-global map
     auto dofs = _dofmap->cell_dofs(cell.index());
 
     // Tabulate dof coordinates
-    _element->tabulate_dof_coordinates(coordinates, coordinate_dofs, cell);
-    dolfin_assert(coordinates.shape()[0] == (std::size_t)dofs.size());
-    dolfin_assert(component < coordinates.shape()[1]);
+    cmap.compute_physical_coordinates(coordinates, X, coordinate_dofs);
+
+    assert(coordinates.rows() == dofs.size());
+    assert(component < (std::size_t)coordinates.cols());
 
     // Copy coordinate (it may be possible to avoid this)
     x_values.resize(dofs.size());
-    for (std::size_t i = 0; i < coordinates.shape()[0]; ++i)
-      x_values[i] = value * coordinates[i][component];
+    for (Eigen::Index i = 0; i < coordinates.rows(); ++i)
+      x_values[i] = value * coordinates(i, component);
 
     // Set x[component] values in vector
     x.set_local(x_values.data(), dofs.size(), dofs.data());
@@ -349,7 +367,7 @@ std::string FunctionSpace::str(bool verbose) const
 //-----------------------------------------------------------------------------
 void FunctionSpace::print_dofmap() const
 {
-  dolfin_assert(_mesh);
+  assert(_mesh);
   for (auto& cell : mesh::MeshRange<mesh::Cell>(*_mesh))
   {
     auto dofs = _dofmap->cell_dofs(cell.index());

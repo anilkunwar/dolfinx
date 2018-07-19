@@ -18,7 +18,8 @@
 #include <string>
 
 #ifdef HAS_SCOTCH
-extern "C" {
+extern "C"
+{
 #include <ptscotch.h>
 #include <stdint.h>
 }
@@ -29,38 +30,8 @@ using namespace dolfin;
 #ifdef HAS_SCOTCH
 
 //-----------------------------------------------------------------------------
-void dolfin::graph::SCOTCH::compute_partition(
-    const MPI_Comm mpi_comm, std::vector<int>& cell_partition,
-    std::map<std::int64_t, std::vector<int>>& ghost_procs,
-    const boost::multi_array<std::int64_t, 2>& cell_vertices,
-    const std::vector<std::size_t>& cell_weight,
-    const std::int64_t num_global_vertices, const std::int64_t num_global_cells,
-    const mesh::CellType& cell_type)
-{
-
-  // Create data structures to hold graph
-  std::unique_ptr<CSRGraph<SCOTCH_Num>> csr_graph;
-  std::set<std::int64_t> ghost_vertices;
-
-  // Build dual graph. Use scoping to clean up memory
-  {
-    // Compute dual graph (for this parition)
-    std::vector<std::vector<std::size_t>> local_graph;
-    GraphBuilder::compute_dual_graph(mpi_comm, cell_vertices, cell_type,
-                                     num_global_vertices, local_graph,
-                                     ghost_vertices);
-
-    csr_graph.reset(new CSRGraph<SCOTCH_Num>(MPI_COMM_SELF, local_graph));
-  }
-
-  // Compute partitions
-  dolfin_assert(csr_graph);
-  partition(mpi_comm, *csr_graph, cell_weight, ghost_vertices, num_global_cells,
-            cell_partition, ghost_procs);
-}
-//-----------------------------------------------------------------------------
-std::vector<int> dolfin::graph::SCOTCH::compute_gps(const Graph& graph,
-                                                    std::size_t num_passes)
+std::pair<std::vector<int>, std::vector<int>>
+dolfin::graph::SCOTCH::compute_gps(const Graph& graph, std::size_t num_passes)
 {
   // Create strategy string for Gibbs-Poole-Stockmeyer ordering
   std::string strategy = "g{pass= " + std::to_string(num_passes) + "}";
@@ -68,18 +39,9 @@ std::vector<int> dolfin::graph::SCOTCH::compute_gps(const Graph& graph,
   return compute_reordering(graph, strategy);
 }
 //-----------------------------------------------------------------------------
-std::vector<int>
+std::pair<std::vector<int>, std::vector<int>>
 dolfin::graph::SCOTCH::compute_reordering(const Graph& graph,
                                           std::string scotch_strategy)
-{
-  std::vector<int> permutation, inverse_permutation;
-  compute_reordering(graph, permutation, inverse_permutation, scotch_strategy);
-  return permutation;
-}
-//-----------------------------------------------------------------------------
-void dolfin::graph::SCOTCH::compute_reordering(
-    const Graph& graph, std::vector<int>& permutation,
-    std::vector<int>& inverse_permutation, std::string scotch_strategy)
 {
   common::Timer timer("Compute SCOTCH graph re-ordering");
 
@@ -118,18 +80,14 @@ void dolfin::graph::SCOTCH::compute_reordering(
 
   // Create SCOTCH graph and initialise
   if (SCOTCH_graphInit(&scotch_graph) != 0)
-  {
-    log::dolfin_error("SCOTCH.cpp", "re-order graph using SCOTCH",
-                 "Error initializing SCOTCH graph");
-  }
+    throw std::runtime_error("Error initializing SCOTCH graph");
 
   // Build SCOTCH graph
   common::Timer timer1("SCOTCH: call SCOTCH_graphBuild");
   if (SCOTCH_graphBuild(&scotch_graph, baseval, vertnbr, &verttab[0],
                         &verttab[1], NULL, NULL, edgenbr, &edgetab[0], NULL))
   {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Error building SCOTCH graph");
+    throw std::runtime_error("Error building SCOTCH graph");
   }
   timer1.stop();
 
@@ -137,11 +95,7 @@ void dolfin::graph::SCOTCH::compute_reordering(
   /*
   #ifdef DEBUG
   if (SCOTCH_graphCheck(&scotch_graph))
-  {
-    log::dolfin_error("SCOTCH.cpp",
-                 "partition mesh using SCOTCH",
-                 "Consistency error in SCOTCH graph");
-  }
+    throw std::runtime_error("Consistency error in SCOTCH graph");
   #endif
   */
 
@@ -166,8 +120,7 @@ void dolfin::graph::SCOTCH::compute_reordering(
   if (SCOTCH_graphOrder(&scotch_graph, &strat, permutation_indices.data(),
                         inverse_permutation_indices.data(), NULL, NULL, NULL))
   {
-    log::dolfin_error("SCOTCH.cpp", "re-order graph using SCOTCH",
-                 "Error during re-ordering");
+    throw std::runtime_error("Error during SCOTCH re-ordering");
   }
   timer2.stop();
 
@@ -176,21 +129,21 @@ void dolfin::graph::SCOTCH::compute_reordering(
   SCOTCH_stratExit(&strat);
 
   // Copy permutation vectors
-  permutation.resize(vertnbr);
-  inverse_permutation.resize(vertnbr);
+  std::vector<int> permutation(vertnbr);
+  std::vector<int> inverse_permutation(vertnbr);
   std::copy(permutation_indices.begin(), permutation_indices.end(),
             permutation.begin());
   std::copy(inverse_permutation_indices.begin(),
             inverse_permutation_indices.end(), inverse_permutation.begin());
+
+  return std::make_pair(std::move(permutation), std::move(inverse_permutation));
 }
 //-----------------------------------------------------------------------------
-template <typename T>
-void dolfin::graph::SCOTCH::partition(
-    const MPI_Comm mpi_comm, CSRGraph<T>& local_graph,
-    const std::vector<std::size_t>& node_weights,
-    const std::set<std::int64_t>& ghost_vertices,
-    const std::size_t num_global_vertices, std::vector<int>& cell_partition,
-    std::map<std::int64_t, std::vector<int>>& ghost_procs)
+std::pair<std::vector<int>, std::map<std::int64_t, std::vector<int>>>
+dolfin::graph::SCOTCH::partition(const MPI_Comm mpi_comm,
+                                 const CSRGraph<SCOTCH_Num>& local_graph,
+                                 const std::vector<std::size_t>& node_weights,
+                                 std::int32_t num_ghost_nodes)
 {
   log::log(PROGRESS, "Compute graph partition using PT-SCOTCH");
   common::Timer timer("Compute graph partition (SCOTCH)");
@@ -208,18 +161,20 @@ void dolfin::graph::SCOTCH::partition(
 
   // Number of local graph vertices (cells)
   const SCOTCH_Num vertlocnbr = local_graph.size();
-  const std::size_t vertgstnbr = vertlocnbr + ghost_vertices.size();
+  const std::size_t vertgstnbr = vertlocnbr + num_ghost_nodes;
 
   // Get graph data
-  std::vector<SCOTCH_Num>& edgeloctab = local_graph.edges();
-  std::vector<SCOTCH_Num>& vertloctab = local_graph.nodes();
+  const std::vector<SCOTCH_Num>& edgeloctab = local_graph.edges();
+  const std::vector<SCOTCH_Num>& vertloctab = local_graph.nodes();
 
   // Global data ---------------------------------
 
   // Number of local vertices (cells) on each process
-  std::vector<SCOTCH_Num> proccnttab;
-  const SCOTCH_Num local_graph_size = local_graph.size();
-  MPI::all_gather(mpi_comm, local_graph_size, proccnttab);
+  std::vector<SCOTCH_Num> proccnttab(num_processes);
+  const std::vector<SCOTCH_Num>& graph_distribution
+      = local_graph.node_distribution();
+  for (std::size_t i = 0; i < num_processes; ++i)
+    proccnttab[i] = graph_distribution[i + 1] - graph_distribution[i];
 
 #ifdef DEBUG
   // FIXME: explain this test
@@ -235,41 +190,36 @@ void dolfin::graph::SCOTCH::partition(
 
   // Sanity check
   for (std::size_t i = 1; i <= proc_num; ++i)
-    dolfin_assert(procvrttab[i] >= (procvrttab[i - 1] + proccnttab[i - 1]));
+    assert(procvrttab[i] >= (procvrttab[i - 1] + proccnttab[i - 1]));
 #endif
 
   // Create SCOTCH graph and initialise
   SCOTCH_Dgraph dgrafdat;
   if (SCOTCH_dgraphInit(&dgrafdat, mpi_comm) != 0)
-  {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Error initializing SCOTCH graph");
-  }
+    throw std::runtime_error("Error initializing SCOTCH graph");
 
   // Handle cell weights (if any)
   std::vector<SCOTCH_Num> vload;
   if (!node_weights.empty())
     vload.assign(node_weights.begin(), node_weights.end());
 
-  // Build SCOTCH distributed graph
+  // Build SCOTCH distributed graph. SCOTCH is not const-correct, so we throw
+  // away constness and trust SCOTCH.
   common::Timer timer1("SCOTCH: call SCOTCH_dgraphBuild");
-  if (SCOTCH_dgraphBuild(&dgrafdat, baseval, vertlocnbr, vertlocnbr,
-                         vertloctab.data(), NULL, vload.data(), NULL,
-                         edgeloctab.size(), edgeloctab.size(),
-                         edgeloctab.data(), NULL, NULL))
+  if (SCOTCH_dgraphBuild(
+          &dgrafdat, baseval, vertlocnbr, vertlocnbr,
+          const_cast<SCOTCH_Num*>(vertloctab.data()), NULL, vload.data(), NULL,
+          edgeloctab.size(), edgeloctab.size(),
+          const_cast<SCOTCH_Num*>(edgeloctab.data()), NULL, NULL))
   {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Error building SCOTCH graph");
+    throw std::runtime_error("Error building SCOTCH graph");
   }
   timer1.stop();
 
 // Check graph data for consistency
 #ifdef DEBUG
   if (SCOTCH_dgraphCheck(&dgrafdat))
-  {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Consistency error in SCOTCH graph");
-  }
+    throw std::runtime_error("Consistency error in SCOTCH graph");
 #endif
 
   // Number of partitions (set equal to number of processes)
@@ -289,7 +239,7 @@ void dolfin::graph::SCOTCH::partition(
   // 0.15);
 
   // Resize vector to hold cell partition indices with enough extra
-  // space for ghost cell partition information too When there are no
+  // space for ghost cell partition information too. When there are no
   // nodes, vertgstnbr may be zero, and at least one dummy location
   // must be created.
   std::vector<SCOTCH_Num> _cell_partition(std::max((std::size_t)1, vertgstnbr),
@@ -302,10 +252,7 @@ void dolfin::graph::SCOTCH::partition(
   // Partition graph
   common::Timer timer2("SCOTCH: call SCOTCH_dgraphPart");
   if (SCOTCH_dgraphPart(&dgrafdat, npart, &strat, _cell_partition.data()))
-  {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Error during partitioning");
-  }
+    throw std::runtime_error("Error during SCOTCH partitioning");
   timer2.stop();
 
   // Exchange halo with cell_partition data for ghosts
@@ -321,14 +268,13 @@ void dolfin::graph::SCOTCH::partition(
   // Double check size is correct
   int tsize;
   MPI_Type_size(MPI_SCOTCH_Num, &tsize);
-  dolfin_assert(tsize == sizeof(SCOTCH_Num));
+  assert(tsize == sizeof(SCOTCH_Num));
 
   common::Timer timer3("SCOTCH: call SCOTCH_dgraphHalo");
   if (SCOTCH_dgraphHalo(&dgrafdat, (void*)_cell_partition.data(),
                         MPI_SCOTCH_Num))
   {
-    log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-                 "Error during halo exchange");
+    throw std::runtime_error("Error during SCOTCH halo exchange");
   }
   timer3.stop();
 
@@ -343,6 +289,7 @@ void dolfin::graph::SCOTCH::partition(
   // Iterate through SCOTCH's local compact graph to find partition
   // boundaries and save to map
   common::Timer timer5("Extract partition boundaries from SCOTCH graph");
+  std::map<std::int64_t, std::vector<int>> ghost_procs;
   for (SCOTCH_Num i = 0; i < vertlocnbr; ++i)
   {
     const std::size_t proc_this = _cell_partition[i];
@@ -380,61 +327,45 @@ void dolfin::graph::SCOTCH::partition(
 
   // Only copy the local nodes partition information. Ghost process
   // data is already in the ghost_procs map
-  cell_partition.resize(vertlocnbr);
-  std::copy(_cell_partition.begin(), _cell_partition.begin() + vertlocnbr,
-            cell_partition.begin());
+
+  return std::make_pair(std::vector<int>(_cell_partition.begin(),
+                                         _cell_partition.begin() + vertlocnbr),
+                        std::move(ghost_procs));
 }
 //-----------------------------------------------------------------------------
 #else
 //-----------------------------------------------------------------------------
-void dolfin::graph::SCOTCH::compute_partition(
-    const MPI_Comm mpi_comm, std::vector<int>& cell_partition,
-    std::map<std::int64_t, std::vector<int>>& ghost_procs,
-    const boost::multi_array<std::int64_t, 2>& cell_vertices,
+std::pair<std::vector<int>, std::map<std::int64_t, std::vector<int>>>
+dolfin::graph::SCOTCH::compute_partition(
+    const MPI_Comm mpi_comm,
+    const Eigen::Ref<const EigenRowArrayXXi64> cell_vertices,
     const std::vector<std::size_t>& cell_weight,
-    const std::int64_t num_global_vertices, const std::int64_t num_global_cells,
-    const mesh::CellType& cell_type)
+    const std::int64_t num_global_vertices, const mesh::CellType& cell_type)
 {
-  log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-               "DOLFIN has been configured without support for SCOTCH");
+  throw std::runtime_error(
+      "DOLFIN has been configured without support for SCOTCH");
+  return std::pair<std::vector<int>,
+                   std::map<std::int64_t, std::vector<int>>>();
 }
 //-----------------------------------------------------------------------------
-std::vector<int> dolfin::graph::SCOTCH::compute_gps(const Graph& graph,
-                                                    std::size_t num_passes)
+std::pair<std::vector<int>, std::vector<int>>
+dolfin::graph::SCOTCH::compute_gps(const Graph& graph, std::size_t num_passes)
 {
-  log::dolfin_error("SCOTCH.cpp", "re-order graph using SCOTCH",
-               "DOLFIN has been configured without support for SCOTCH");
-  return std::vector<int>();
+  throw std::runtime_error(
+      "DOLFIN has been configured without support for SCOTCH");
+  return std::make_pair(std::vector<int>(), std::vector<int>());
 }
 //-----------------------------------------------------------------------------
-std::vector<int>
+std::pair<std::vector<int>, std::vector<int>>
 dolfin::graph::SCOTCH::compute_reordering(const Graph& graph,
+                                          std::vector<int>& permutation,
+                                          std::vector<int>& inverse_permutation,
                                           std::string scotch_strategy)
-{
-  log::dolfin_error("SCOTCH.cpp", "re-order graph using SCOTCH",
-               "DOLFIN has been configured without support for SCOTCH");
-  return std::vector<int>();
-}
-//-----------------------------------------------------------------------------
-void dolfin::graph::SCOTCH::compute_reordering(
-    const Graph& graph, std::vector<int>& permutation,
-    std::vector<int>& inverse_permutation, std::string scotch_strategy)
 
 {
-  log::dolfin_error("SCOTCH.cpp", "re-order graph using SCOTCH",
-               "DOLFIN has been configured without support for SCOTCH");
-}
-//-----------------------------------------------------------------------------
-template <typename T>
-void dolfin::graph::SCOTCH::partition(
-    const MPI_Comm mpi_comm, CSRGraph<T>& local_graph,
-    const std::vector<std::size_t>& node_weights,
-    const std::set<std::int64_t>& ghost_vertices,
-    const std::size_t num_global_vertices, std::vector<int>& cell_partition,
-    std::map<std::int64_t, std::vector<int>>& ghost_procs)
-{
-  log::dolfin_error("SCOTCH.cpp", "partition mesh using SCOTCH",
-               "DOLFIN has been configured without support for SCOTCH");
+  throw std::runtime_error(
+      "DOLFIN has been configured without support for SCOTCH");
+  return std::make_pair(std::vector<int>(), std::vector<int>());
 }
 //-----------------------------------------------------------------------------
 

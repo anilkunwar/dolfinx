@@ -61,7 +61,7 @@ void SLEPcEigenSolver::set_operators(std::shared_ptr<const PETScMatrix> A,
                                      std::shared_ptr<const PETScMatrix> B)
 {
   // Set operators
-  dolfin_assert(_eps);
+  assert(_eps);
   if (B)
     EPSSetOperators(_eps, A->mat(), B->mat());
   else
@@ -72,12 +72,12 @@ void SLEPcEigenSolver::solve()
 {
   // Get operators
   Mat A, B;
-  dolfin_assert(_eps);
+  assert(_eps);
   EPSGetOperators(_eps, &A, &B);
 
   // Wrap operator as short-cut to get size
   PETScMatrix A_wrapped(A);
-  solve(A_wrapped.size(0));
+  solve(A_wrapped.size()[0]);
 }
 //-----------------------------------------------------------------------------
 void SLEPcEigenSolver::solve(std::int64_t n)
@@ -85,16 +85,16 @@ void SLEPcEigenSolver::solve(std::int64_t n)
 #ifdef DEBUG
   // Get operators
   Mat A, B;
-  dolfin_assert(_eps);
+  assert(_eps);
   EPSGetOperators(_eps, &A, &B);
 
   // Wrap operator as short-cut to get size
   PETScMatrix A_wrapped(A);
-  dolfin_assert(n <= A_wrapped.size(0));
+  assert(n <= A_wrapped.size()[0]);
 #endif
 
   // Set number of eigenpairs to compute
-  dolfin_assert(_eps);
+  assert(_eps);
   EPSSetDimensions(_eps, n, PETSC_DECIDE, PETSC_DECIDE);
 
   // Set parameters set on SLEPcEigenSolver object
@@ -138,10 +138,9 @@ void SLEPcEigenSolver::solve(std::int64_t n)
            eps_type, num_iterations);
 }
 //-----------------------------------------------------------------------------
-void SLEPcEigenSolver::get_eigenvalue(double& lr, double& lc,
-                                      std::size_t i) const
+std::complex<PetscReal> SLEPcEigenSolver::get_eigenvalue(std::size_t i) const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   const PetscInt ii = static_cast<PetscInt>(i);
 
   // Get number of computed values
@@ -149,19 +148,29 @@ void SLEPcEigenSolver::get_eigenvalue(double& lr, double& lc,
   EPSGetConverged(_eps, &num_computed_eigenvalues);
 
   if (ii < num_computed_eigenvalues)
-    EPSGetEigenvalue(_eps, ii, &lr, &lc);
+  {
+#ifdef PETSC_USE_COMPLEX
+    PetscScalar l;
+    EPSGetEigenvalue(_eps, ii, &l, NULL);
+    return l;
+#else
+    PetscScalar lr, li;
+    EPSGetEigenvalue(_eps, ii, &lr, &li);
+    return std::complex<PetscReal>(lr, li);
+#endif
+  }
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "extract eigenvalue from SLEPc eigenvalue solver",
-                      "Requested eigenvalue (%d) has not been computed", i);
+    throw std::runtime_error("Requested eigenvalue (" + std::to_string(i)
+                             + ") has not been computed");
   }
 }
 //-----------------------------------------------------------------------------
-void SLEPcEigenSolver::get_eigenpair(double& lr, double& lc, PETScVector& r,
-                                     PETScVector& c, std::size_t i) const
+void SLEPcEigenSolver::get_eigenpair(PetscScalar& lr, PetscScalar& lc,
+                                     PETScVector& r, PETScVector& c,
+                                     std::size_t i) const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   const PetscInt ii = static_cast<PetscInt>(i);
 
   // Get number of computed eigenvectors/values
@@ -172,29 +181,28 @@ void SLEPcEigenSolver::get_eigenpair(double& lr, double& lc, PETScVector& r,
   {
     // Get operators
     Mat A, B;
-    dolfin_assert(_eps);
+    assert(_eps);
     EPSGetOperators(_eps, &A, &B);
 
     // Wrap operator and initialize r and c
     PETScMatrix A_wrapped(A);
-    A_wrapped.init_vector(r, 0);
-    A_wrapped.init_vector(c, 0);
+    r = A_wrapped.init_vector(0);
+    c = A_wrapped.init_vector(0);
 
     // Get eigen pairs
     EPSGetEigenpair(_eps, ii, &lr, &lc, r.vec(), c.vec());
   }
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "extract eigenpair from SLEPc eigenvalue solver",
-                      "Requested eigenpair (%d) has not been computed", i);
+    throw std::runtime_error("Requested eigenpair (" + std::to_string(i)
+                             + ") has not been computed");
   }
 }
 //-----------------------------------------------------------------------------
 std::size_t SLEPcEigenSolver::get_number_converged() const
 {
   PetscInt num_conv;
-  dolfin_assert(_eps);
+  assert(_eps);
   EPSGetConverged(_eps, &num_conv);
   return num_conv;
 }
@@ -202,14 +210,14 @@ std::size_t SLEPcEigenSolver::get_number_converged() const
 void SLEPcEigenSolver::set_deflation_space(
     const la::VectorSpaceBasis& deflation_space)
 {
-  dolfin_assert(_eps);
+  assert(_eps);
 
   // Get PETSc vector pointers from VectorSpaceBasis
   std::vector<Vec> petsc_vecs(deflation_space.dim());
   for (std::size_t i = 0; i < deflation_space.dim(); ++i)
   {
-    dolfin_assert(deflation_space[i]);
-    dolfin_assert(deflation_space[i]->vec());
+    assert(deflation_space[i]);
+    assert(deflation_space[i]->vec());
     petsc_vecs[i] = deflation_space[i]->vec();
   }
 
@@ -222,14 +230,14 @@ void SLEPcEigenSolver::set_deflation_space(
 void SLEPcEigenSolver::set_initial_space(
     const la::VectorSpaceBasis& initial_space)
 {
-  dolfin_assert(_eps);
+  assert(_eps);
 
   // Get PETSc vector pointers from VectorSpaceBasis
   std::vector<Vec> petsc_vecs(initial_space.dim());
   for (std::size_t i = 0; i < initial_space.dim(); ++i)
   {
-    dolfin_assert(initial_space[i]);
-    dolfin_assert(initial_space[i]->vec());
+    assert(initial_space[i]);
+    assert(initial_space[i]->vec());
     petsc_vecs[i] = initial_space[i]->vec();
   }
 
@@ -242,7 +250,7 @@ void SLEPcEigenSolver::set_initial_space(
 void SLEPcEigenSolver::set_options_prefix(std::string options_prefix)
 {
   // Set options prefix
-  dolfin_assert(_eps);
+  assert(_eps);
   PetscErrorCode ierr = EPSSetOptionsPrefix(_eps, options_prefix.c_str());
   if (ierr != 0)
     petsc_error(ierr, __FILE__, "EPSSetOptionsPrefix");
@@ -250,7 +258,7 @@ void SLEPcEigenSolver::set_options_prefix(std::string options_prefix)
 //-----------------------------------------------------------------------------
 std::string SLEPcEigenSolver::get_options_prefix() const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   const char* prefix = NULL;
   PetscErrorCode ierr = EPSGetOptionsPrefix(_eps, &prefix);
   if (ierr != 0)
@@ -260,7 +268,7 @@ std::string SLEPcEigenSolver::get_options_prefix() const
 //-----------------------------------------------------------------------------
 void SLEPcEigenSolver::set_from_options() const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   PetscErrorCode ierr = EPSSetFromOptions(_eps);
   if (ierr != 0)
     petsc_error(ierr, __FILE__, "EPSSetFromOptions");
@@ -299,10 +307,8 @@ void SLEPcEigenSolver::read_parameters()
     }
     else
     {
-      log::dolfin_error(
-          "SLEPcEigenSolver.cpp", "set spectral transform",
-          "For an spectral transform, the spectral shift parameter "
-          "must be set");
+      throw std::runtime_error("For an spectral transform, the spectral shift "
+                               "parameter must be set");
     }
   }
 }
@@ -313,7 +319,7 @@ void SLEPcEigenSolver::set_problem_type(std::string type)
   if (type == "default")
     return;
 
-  dolfin_assert(_eps);
+  assert(_eps);
   if (type == "hermitian")
     EPSSetProblemType(_eps, EPS_HEP);
   else if (type == "non_hermitian")
@@ -326,9 +332,7 @@ void SLEPcEigenSolver::set_problem_type(std::string type)
     EPSSetProblemType(_eps, EPS_PGNHEP);
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "set problem type for SLEPc eigensolver",
-                      "Unknown problem type (\"%s\")", type.c_str());
+    throw std::runtime_error("Unknown problem type (" + type + ")");
   }
 }
 //-----------------------------------------------------------------------------
@@ -338,7 +342,7 @@ void SLEPcEigenSolver::set_spectral_transform(std::string transform,
   if (transform == "default")
     return;
 
-  dolfin_assert(_eps);
+  assert(_eps);
   ST st;
   EPSGetST(_eps, &st);
   if (transform == "shift-and-invert")
@@ -348,9 +352,7 @@ void SLEPcEigenSolver::set_spectral_transform(std::string transform,
   }
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "set spectral transform for SLEPc eigensolver",
-                      "Unknown transform (\"%s\")", transform.c_str());
+    throw std::runtime_error("Unknown transform (" + transform + ")");
   }
 }
 //-----------------------------------------------------------------------------
@@ -361,7 +363,7 @@ void SLEPcEigenSolver::set_spectrum(std::string spectrum)
     return;
 
   // Choose spectrum
-  dolfin_assert(_eps);
+  assert(_eps);
   if (spectrum == "largest magnitude")
     EPSSetWhichEigenpairs(_eps, EPS_LARGEST_MAGNITUDE);
   else if (spectrum == "smallest magnitude")
@@ -378,25 +380,32 @@ void SLEPcEigenSolver::set_spectrum(std::string spectrum)
   {
     EPSSetWhichEigenpairs(_eps, EPS_TARGET_MAGNITUDE);
     if (parameters["spectral_shift"].is_set())
-      EPSSetTarget(_eps, parameters["spectral_shift"]);
+    {
+      PetscScalar shift = (double)parameters["spectral_shift"];
+      EPSSetTarget(_eps, shift);
+    }
   }
   else if (spectrum == "target real")
   {
     EPSSetWhichEigenpairs(_eps, EPS_TARGET_REAL);
     if (parameters["spectral_shift"].is_set())
-      EPSSetTarget(_eps, parameters["spectral_shift"]);
+    {
+      PetscScalar shift = (double)parameters["spectral_shift"];
+      EPSSetTarget(_eps, shift);
+    }
   }
   else if (spectrum == "target imaginary")
   {
     EPSSetWhichEigenpairs(_eps, EPS_TARGET_IMAGINARY);
     if (parameters["spectral_shift"].is_set())
-      EPSSetTarget(_eps, parameters["spectral_shift"]);
+    {
+      PetscScalar shift = (double)parameters["spectral_shift"];
+      EPSSetTarget(_eps, shift);
+    }
   }
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "set spectrum for SLEPc eigensolver",
-                      "Unknown spectrum type (\"%s\")", spectrum.c_str());
+    throw std::runtime_error("Unknown spectrum type (" + spectrum + ")");
   }
 
   // FIXME: Need to add some test here as most algorithms only compute
@@ -411,7 +420,7 @@ void SLEPcEigenSolver::set_solver(std::string solver)
 
   // Choose solver (Note that lanczos will give PETSc error unless
   // problem_type is set to 'hermitian' or 'gen_hermitian')
-  dolfin_assert(_eps);
+  assert(_eps);
   if (solver == "power")
     EPSSetType(_eps, EPSPOWER);
   else if (solver == "subspace")
@@ -432,22 +441,20 @@ void SLEPcEigenSolver::set_solver(std::string solver)
     EPSSetType(_eps, EPSGD);
   else
   {
-    log::dolfin_error("SLEPcEigenSolver.cpp",
-                      "set solver for SLEPc eigensolver",
-                      "Unknown solver type (\"%s\")", solver.c_str());
+    throw std::runtime_error("Unknown solver type (" + solver + ")");
   }
 }
 //-----------------------------------------------------------------------------
 void SLEPcEigenSolver::set_tolerance(double tolerance, int maxiter)
 {
-  dolfin_assert(tolerance > 0.0);
-  dolfin_assert(_eps);
+  assert(tolerance > 0.0);
+  assert(_eps);
   EPSSetTolerances(_eps, tolerance, maxiter);
 }
 //-----------------------------------------------------------------------------
 std::size_t SLEPcEigenSolver::get_iteration_number() const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   PetscInt num_iter;
   EPSGetIterationNumber(_eps, &num_iter);
   return num_iter;
@@ -457,7 +464,7 @@ EPS SLEPcEigenSolver::eps() const { return _eps; }
 //-----------------------------------------------------------------------------
 MPI_Comm SLEPcEigenSolver::mpi_comm() const
 {
-  dolfin_assert(_eps);
+  assert(_eps);
   MPI_Comm mpi_comm = MPI_COMM_NULL;
   PetscObjectGetComm((PetscObject)_eps, &mpi_comm);
   return mpi_comm;

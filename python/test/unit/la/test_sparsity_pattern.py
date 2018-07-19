@@ -2,25 +2,13 @@
 
 # Copyright (C) 2017 Nathan Sime
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import pytest
 import numpy as np
-from dolfin import *
-from dolfin_utils.test import *
+from dolfin import UnitSquareMesh, MPI, CellType, FunctionSpace, cpp
+from dolfin_utils.test import fixture
 
 
 def count_on_and_off_diagonal_nnz(primary_codim_entries, local_range):
@@ -44,21 +32,17 @@ def V(mesh):
 def xtest_str(mesh, V):
     dm = V.dofmap()
     index_map = dm.index_map()
+    assert index_map
 
     # Build sparse tensor layout (for assembly of matrix)
-    tl = TensorLayout(mesh.mpi_comm(), 0, TensorLayout.Sparsity.SPARSE)
-    tl.init([index_map, index_map], TensorLayout.Ghosts.UNGHOSTED)
-    sp = tl.sparsity_pattern()
-    sp.init([index_map, index_map])
-    SparsityPatternBuilder.build(
-        sp,
+    sp = cpp.fem.SparsityPatternBuilder.build(
+        mesh.mpi_comm(),
         mesh, [dm, dm],
         True,
         False,
         False,
         False,
         False,
-        init=False,
         finalize=True)
 
     sp.str(False)
@@ -68,17 +52,16 @@ def xtest_str(mesh, V):
 def test_insert_local(mesh, V):
     dm = V.dofmap()
     index_map = dm.index_map()
+    assert index_map
 
-    sp = cpp.la.SparsityPattern(mesh.mpi_comm(), [index_map, index_map], 0)
-    cpp.fem.SparsityPatternBuilder.build(
-        sp,
+    sp = cpp.fem.SparsityPatternBuilder.build(
+        mesh.mpi_comm(),
         mesh, [dm, dm],
         True,
         False,
         False,
         False,
         False,
-        init=False,
         finalize=True)
 
     sp1 = cpp.la.SparsityPattern(mesh.mpi_comm(), [[sp], [sp]])
@@ -103,8 +86,8 @@ def xtest_insert_global(mesh, V):
     local_range = index_map.local_range()
 
     # Build sparse tensor layout
-    tl = TensorLayout(mesh.mpi_comm(), 0, TensorLayout.Sparsity.SPARSE)
-    tl.init([index_map, index_map], TensorLayout.Ghosts.UNGHOSTED)
+    tl = cpp.la.TensorLayout(mesh.mpi_comm(), 0, cpp.la.TensorLayout.Sparsity.SPARSE)
+    tl.init([index_map, index_map], cpp.la.TensorLayout.Ghosts.UNGHOSTED)
     sp = tl.sparsity_pattern()
     sp.init([index_map, index_map])
 
@@ -125,8 +108,8 @@ def xtest_insert_global(mesh, V):
     nnz_d = sp.num_nonzeros_diagonal()
     nnz_od = sp.num_nonzeros_off_diagonal()
 
-    rank = MPI.rank(mesh.mpi_comm())
-    size = MPI.size(mesh.mpi_comm())
+    # rank = MPI.rank(mesh.mpi_comm())
+    # size = MPI.size(mesh.mpi_comm())
 
     # Tabulate on diagonal and off diagonal nnzs
     nnz_on_diagonal, nnz_off_diagonal = count_on_and_off_diagonal_nnz(
@@ -135,13 +118,13 @@ def xtest_insert_global(mesh, V):
     # Compare tabulated and sparsity pattern nnzs
     for local_row in range(len(nnz_d)):
         if local_range[0] <= local_row < local_range[1]:
-            assert nnz_d[local_row] == (
-                nnz_on_diagonal
-                if local_row in primary_dim_local_entries else 0)
+            assert nnz_d[local_row] == (nnz_on_diagonal if
+                                        local_row in primary_dim_local_entries
+                                        else 0)
         else:
-            assert nnz_od[local_row] == (
-                nnz_off_diagonal
-                if local_row in primary_dim_local_entries else 0)
+            assert nnz_od[local_row] == (nnz_off_diagonal if
+                                         local_row in primary_dim_local_entries
+                                         else 0)
 
 
 def xtest_insert_local_global(mesh, V):
@@ -150,8 +133,8 @@ def xtest_insert_local_global(mesh, V):
     local_range = index_map.local_range()
 
     # Build sparse tensor layout
-    tl = TensorLayout(mesh.mpi_comm(), 0, TensorLayout.Sparsity.SPARSE)
-    tl.init([index_map, index_map], TensorLayout.Ghosts.UNGHOSTED)
+    tl = cpp.la.TensorLayout(mesh.mpi_comm(), 0, cpp.la.TensorLayout.Sparsity.SPARSE)
+    tl.init([index_map, index_map], cpp.la.TensorLayout.Ghosts.UNGHOSTED)
     sp = tl.sparsity_pattern()
     sp.init([index_map, index_map])
 
@@ -172,8 +155,8 @@ def xtest_insert_local_global(mesh, V):
     nnz_d = sp.num_nonzeros_diagonal()
     nnz_od = sp.num_nonzeros_off_diagonal()
 
-    rank = MPI.rank(mesh.mpi_comm())
-    size = MPI.size(mesh.mpi_comm())
+    # rank = MPI.rank(mesh.mpi_comm())
+    # size = MPI.size(mesh.mpi_comm())
 
     # Tabulate on diagonal and off diagonal nnzs
     nnz_on_diagonal, nnz_off_diagonal = count_on_and_off_diagonal_nnz(
@@ -182,10 +165,10 @@ def xtest_insert_local_global(mesh, V):
     # Compare tabulated and sparsity pattern nnzs
     for local_row in range(len(nnz_d)):
         if local_range[0] <= local_row < local_range[1]:
-            assert nnz_d[local_row] == (
-                nnz_on_diagonal
-                if local_row in primary_dim_local_entries else 0)
+            assert nnz_d[local_row] == (nnz_on_diagonal if
+                                        local_row in primary_dim_local_entries
+                                        else 0)
         else:
-            assert nnz_od[local_row] == (
-                nnz_off_diagonal
-                if local_row in primary_dim_local_entries else 0)
+            assert nnz_od[local_row] == (nnz_off_diagonal if
+                                         local_row in primary_dim_local_entries
+                                         else 0)

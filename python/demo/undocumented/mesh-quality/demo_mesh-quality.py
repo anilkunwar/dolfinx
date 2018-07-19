@@ -1,45 +1,71 @@
 "This demo illustrates basic inspection of mesh quality."
 
-# Copyright (C) 2013 Jan Blechta
+# Copyright (C) 2013-2018 Jan Blechta and Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# First added:  2013-11-19
-# Last changed:
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-
-from dolfin import *
+import numpy as np
 import matplotlib.pyplot as plt
+import dolfin.cpp.mesh
+from dolfin import *
 
 
-# Read mesh from file
-mesh = Mesh("../dolfin_fine.xml.gz")
+# Create mesh
+n = 12
+mesh = BoxMesh.create(MPI.comm_world, [Point(0, 0, 0), Point(1, 1, 1)], [
+                      n, n, n], CellType.Type.tetrahedron)
 
-# Print minimal and maximal radius ratio
+# Print minimum and maximum radius ratio
 qmin, qmax = MeshQuality.radius_ratio_min_max(mesh)
 print('Minimal radius ratio:', qmin)
 print('Maximal radius ratio:', qmax)
 
-# Show histogram using matplotlib
-hist = MeshQuality.radius_ratio_matplotlib_histogram(mesh)
-hist = hist.replace('    import matplotlib.pylab', '    import matplotlib\n    matplotlib.use(\'Agg\')\n    import matplotlib.pylab\n')
-hist = hist.replace('matplotlib.pylab.show()', 'matplotlib.pylab.savefig("mesh-quality.pdf")')
-print(hist)
-exec(hist)
+# Plot histogram for radius ratio
+bins, num = dolfin.cpp.mesh.MeshQuality.radius_ratio_histogram_data(mesh, 20)
+plt.subplot(221)
+plt.bar(bins, num, width=0.9*(bins[1]-bins[0]))
+plt.title("Radius ratios (original mesh)")
+plt.xlabel("ratio")
+plt.ylabel("number of cells")
+plt.xlim(0.0, 1.0)
+plt.xticks((0.0, 0.5, 1.0))
 
-# Show mesh
-plot(mesh)
+# Plot histogram for diahedral angle
+bins, num = dolfin.cpp.mesh.MeshQuality.dihedral_angle_histogram_data(mesh, 20)
+plt.subplot(222)
+plt.bar(bins, num, width=0.9*(bins[1]-bins[0]))
+plt.title("Dihedral angle (original mesh)")
+plt.xlabel("angle")
+plt.ylabel("number of angles")
+plt.xlim(0.0, np.pi)
+plt.xticks((0.0, np.pi/2.0, np.pi), (0, '$\pi/2$', '$\pi$'))
+
+# Move points
+x = mesh.geometry.points[:]
+xr = np.random.randn(x.shape[0], x.shape[1])
+x += 0.2*(1.0/n)*xr
+
+# Plot histogram for radius ratio (perturbed mesh)
+bins, num = dolfin.cpp.mesh.MeshQuality.radius_ratio_histogram_data(mesh, 20)
+plt.subplot(223)
+plt.bar(bins, num, width=0.9*(bins[1]-bins[0]))
+plt.title("Radius ratios (perturbed mesh)")
+plt.xlabel("ratio")
+plt.ylabel("number of cells")
+plt.xlim(0.0, 1.0)
+plt.xticks((0.0, 0.5, 1.0))
+
+# Plot histogram for diahedral angle (perturbed mesh)
+bins, num = dolfin.cpp.mesh.MeshQuality.dihedral_angle_histogram_data(mesh, 20)
+plt.subplot(224)
+plt.bar(bins, num, width=0.9*(bins[1]-bins[0]))
+plt.title("Dihedral angle (perturbed mesh)")
+plt.xlabel("angle")
+plt.ylabel("number of angles")
+plt.xlim(0.0, np.pi)
+plt.xticks((0.0, np.pi/2.0, np.pi), (0, '$\pi/2$', '$\pi$'))
+
+# Show plot
 plt.show()

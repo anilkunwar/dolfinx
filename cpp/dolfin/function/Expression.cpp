@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #include "Expression.h"
+#include <dolfin/fem/CoordinateMapping.h>
 #include <dolfin/fem/FiniteElement.h>
 #include <dolfin/log/log.h>
 #include <dolfin/mesh/Cell.h>
@@ -41,16 +42,20 @@ Expression::~Expression()
   // Do nothing
 }
 //-----------------------------------------------------------------------------
-void Expression::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                      Eigen::Ref<const EigenRowMatrixXd> x,
-                      const ufc::cell& cell) const
+void Expression::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                              Eigen::Dynamic, Eigen::RowMajor>>
+                          values,
+                      Eigen::Ref<const EigenRowArrayXXd> x,
+                      const mesh::Cell& cell) const
 {
   // Redirect to simple eval
   eval(values, x);
 }
 //-----------------------------------------------------------------------------
-void Expression::eval(Eigen::Ref<EigenRowMatrixXd> values,
-                      Eigen::Ref<const EigenRowMatrixXd> x) const
+void Expression::eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                              Eigen::Dynamic, Eigen::RowMajor>>
+                          values,
+                      Eigen::Ref<const EigenRowArrayXXd> x) const
 {
   if (_eval)
   {
@@ -83,76 +88,86 @@ std::vector<std::size_t> Expression::value_shape() const
   return _value_shape;
 }
 //-----------------------------------------------------------------------------
-void Expression::set_property(std::string name, double value)
+void Expression::set_property(std::string name, PetscScalar value)
 {
-  log::dolfin_error("Expression.cpp", "set property",
-                    "This method should be overloaded in the derived class");
+  throw std::runtime_error(
+      "Expression::set_property should be overloaded in the derived class");
 }
 //-----------------------------------------------------------------------------
-double Expression::get_property(std::string name) const
+PetscScalar Expression::get_property(std::string name) const
 {
-  log::dolfin_error("Expression.cpp", "get property",
-                    "This method should be overloaded in the derived class");
+  throw std::runtime_error(
+      "Expression::get_property should be overloaded in the derived class");
   return 0.0;
 }
 //-----------------------------------------------------------------------------
 void Expression::set_generic_function(std::string name,
                                       std::shared_ptr<GenericFunction>)
 {
-  log::dolfin_error("Expression.cpp", "set property",
-                    "This method should be overloaded in the derived class");
+  throw std::runtime_error("Expression::set_generic_function should be "
+                           "overloaded in the derived class");
 }
 //-----------------------------------------------------------------------------
 std::shared_ptr<GenericFunction>
 Expression::get_generic_function(std::string name) const
 {
-  log::dolfin_error("Expression.cpp", "get property",
-                    "This method should be overloaded in the derived class");
+  throw std::runtime_error("Expression::get_generic_function should be "
+                           "overloaded in the derived class");
   return std::shared_ptr<GenericFunction>();
 }
 //-----------------------------------------------------------------------------
-void Expression::restrict(double* w, const fem::FiniteElement& element,
-                          const mesh::Cell& dolfin_cell,
-                          const double* coordinate_dofs,
-                          const ufc::cell& ufc_cell) const
+void Expression::restrict(
+    PetscScalar* w, const fem::FiniteElement& element, const mesh::Cell& cell,
+    const Eigen::Ref<const EigenRowArrayXXd>& coordinate_dofs) const
 {
   // Get evaluation points
   const std::size_t vs = value_size();
   const std::size_t ndofs = element.space_dimension();
-  const std::size_t gdim = element.geometric_dimension();
+  const std::size_t gdim = cell.mesh().geometry().dim();
 
   // FIXME: for Vector Lagrange elements (and probably Tensor too),
   // this repeats the same evaluation points "gdim" times. Should only
   // do them once, and remove the "mapping" below (which is the identity).
 
-  EigenRowArrayXXd eval_points(ndofs, gdim);
-  element.ufc_element()->tabulate_dof_coordinates(eval_points.data(),
-                                                  coordinate_dofs);
+  // Get dof coordinates on reference element
+  const EigenRowArrayXXd& X = element.dof_reference_coordinates();
+
+  // Get coordinate mapping
+  if (!cell.mesh().geometry().coord_mapping)
+  {
+    throw std::runtime_error(
+        "CoordinateMapping has not been attached to mesh.");
+  }
+  const fem::CoordinateMapping& cmap = *cell.mesh().geometry().coord_mapping;
+
+  Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      eval_points(ndofs, gdim);
+  cmap.compute_physical_coordinates(eval_points, X, coordinate_dofs);
 
   // Storage for evaluation values
-  EigenRowArrayXXd eval_values(ndofs, vs);
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      eval_values(ndofs, vs);
 
   // Evaluate all points in one call
-  eval(eval_values, eval_points, ufc_cell);
+  eval(eval_values, eval_points, cell);
 
-  // Transpose for vector values
-  // FIXME: remove need for this - needs work in ffc
-  eval_values.transposeInPlace();
-
+  // FIXME: *do not* use UFC directly
   // Apply a mapping to the reference element.
   // FIXME: not needed for Lagrange elements, eliminate.
   // See: ffc/uflacs/backends/ufc/evaluatedof.py:_change_variables()
-  element.ufc_element()->map_dofs(w, eval_values.data(), coordinate_dofs, -1);
+  element.transform_values(w, eval_values, coordinate_dofs);
 }
 //-----------------------------------------------------------------------------
-EigenRowArrayXXd Expression::compute_vertex_values(const mesh::Mesh& mesh) const
+Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+Expression::compute_point_values(const mesh::Mesh& mesh) const
 {
   // Local data for vertex values
   const std::size_t size = value_size();
-  Eigen::RowVectorXd local_vertex_values(size);
+  Eigen::Matrix<PetscScalar, 1, Eigen::Dynamic> local_vertex_values(size);
 
   // Resize vertex_values
-  EigenRowArrayXXd vertex_values(mesh.num_vertices(), size);
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      vertex_values(mesh.num_vertices(), size);
 
   // Iterate over cells, overwriting values when repeatedly visiting vertices
   for (auto& cell : mesh::MeshRange<mesh::Cell>(mesh, mesh::MeshRangeType::ALL))
@@ -161,7 +176,7 @@ EigenRowArrayXXd Expression::compute_vertex_values(const mesh::Mesh& mesh) const
     for (auto& vertex : mesh::EntityRange<mesh::Vertex>(cell))
     {
       // Wrap coordinate data
-      Eigen::Map<const Eigen::VectorXd> x(vertex.x(), mesh.geometry().dim());
+      const Eigen::Ref<const Eigen::VectorXd> x = vertex.x();
 
       // Evaluate at vertex
       eval(local_vertex_values, x);

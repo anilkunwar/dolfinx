@@ -1,28 +1,15 @@
-"Unit tests for the MeshEditor class"
-
 # Copyright (C) 2006-2011 Anders Logg
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
-# First added:  2006-08-08
-# Last changed: 2014-02-06
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-from dolfin import *
+from dolfin import Mesh, MPI, CellType, cpp
+from dolfin_utils.test import skip_in_parallel
 import numpy
 
+
+@skip_in_parallel
 def test_triangle_mesh():
 
     # Create mesh object
@@ -30,4 +17,7 @@ def test_triangle_mesh():
                 numpy.array([[0.0, 0.0],
                              [1.0, 0.0],
                             [0.0, 1.0]], dtype=numpy.float64),
-                numpy.array([[0,1,2]], dtype=numpy.int32))
+                numpy.array([[0, 1, 2]], dtype=numpy.int32), [],
+                cpp.mesh.GhostMode.none)
+    assert mesh.num_entities_global(0) == 3
+    assert mesh.num_entities_global(2) == 1

@@ -17,15 +17,16 @@ using namespace dolfin::generation;
 
 //-----------------------------------------------------------------------------
 mesh::Mesh IntervalMesh::build(MPI_Comm comm, std::size_t nx,
-                               std::array<double, 2> x)
+                               std::array<double, 2> x,
+                               const mesh::GhostMode ghost_mode)
 {
   // Receive mesh according to parallel policy
   if (MPI::rank(comm) != 0)
   {
     EigenRowArrayXXd geom(0, 1);
-    EigenRowArrayXXi32 topo(0, 2);
-    mesh::Mesh mesh(comm, mesh::CellType::Type::interval, geom, topo);
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
+    EigenRowArrayXXi64 topo(0, 2);
+    return mesh::MeshPartitioning::build_distributed_mesh(
+        comm, mesh::CellType::Type::interval, geom, topo, {}, ghost_mode);
   }
 
   const double a = x[0];
@@ -34,28 +35,21 @@ mesh::Mesh IntervalMesh::build(MPI_Comm comm, std::size_t nx,
 
   if (std::abs(a - b) < DOLFIN_EPS)
   {
-    log::dolfin_error(
-        "Interval.cpp", "create interval",
-        "Length of interval is zero. Consider checking your dimensions");
+    throw std::runtime_error(
+        "Length of interval is zero. Check your dimensions.");
   }
 
   if (b < a)
   {
-    log::dolfin_error(
-        "Interval.cpp", "create interval",
-        "Length of interval is negative. Consider checking the order "
-        "of your arguments");
+    throw std::runtime_error(
+        "Interval length is negative. Check order of arguments.");
   }
 
   if (nx < 1)
-  {
-    log::dolfin_error(
-        "Interval.cpp", "create interval",
-        "Number of points on interval is (%d), it must be at least 1", nx);
-  }
+    throw std::runtime_error("Number of points on interval must be at least 1");
 
   EigenRowArrayXXd geom((nx + 1), 1);
-  EigenRowArrayXXi32 topo(nx, 2);
+  EigenRowArrayXXi64 topo(nx, 2);
 
   // Create vertices
   for (std::size_t ix = 0; ix <= nx; ix++)
@@ -65,11 +59,7 @@ mesh::Mesh IntervalMesh::build(MPI_Comm comm, std::size_t nx,
   for (std::size_t ix = 0; ix < nx; ix++)
     topo.row(ix) << ix, ix + 1;
 
-  mesh::Mesh mesh(comm, mesh::CellType::Type::interval, geom, topo);
-
-  if (dolfin::MPI::size(comm) > 1)
-    return mesh::MeshPartitioning::build_distributed_mesh(mesh);
-  else
-    return mesh;
+  return mesh::MeshPartitioning::build_distributed_mesh(
+      comm, mesh::CellType::Type::interval, geom, topo, {}, ghost_mode);
 }
 //-----------------------------------------------------------------------------

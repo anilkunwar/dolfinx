@@ -1,27 +1,11 @@
-"""Unit tests for SubDomain"""
-
 # Copyright (C) 2013 Johan Hake
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-
-import pytest
 import numpy as np
-from dolfin import *
-from dolfin_utils.test import skip_in_parallel
+from dolfin import SubDomain, DOLFIN_EPS, MPI, MeshFunction, UnitSquareMesh, UnitCubeMesh, UnitIntervalMesh
 
 
 def test_creation_and_marking():
@@ -48,14 +32,14 @@ def test_creation_and_marking():
     for ind, MeshClass in enumerate([UnitIntervalMesh, UnitSquareMesh,
                                      UnitCubeMesh]):
         dim = ind + 1
-        args = [10]*dim
+        args = [10] * dim
         mesh = MeshClass(MPI.comm_world, *args)
         mesh.init()
 
         for left, right in subdomain_pairs:
             for t_dim, f_dim in [(0, 0),
-                                 (mesh.topology().dim()-1, dim - 1),
-                                 (mesh.topology().dim(), dim)]:
+                                 (mesh.topology.dim - 1, dim - 1),
+                                 (mesh.topology.dim, dim)]:
                 f = MeshFunction("size_t", mesh, t_dim, 0)
 
                 left.mark(f, 1)
@@ -80,8 +64,8 @@ def test_creation_and_marking():
                 ])
 
         for t_dim, f_dim in [(0, 0),
-                             (mesh.topology().dim()-1, dim-1),
-                             (mesh.topology().dim(), dim)]:
+                             (mesh.topology.dim - 1, dim - 1),
+                             (mesh.topology.dim, dim)]:
             f = MeshFunction("size_t", mesh, t_dim, 0)
 
             class AllTrue(SubDomain):

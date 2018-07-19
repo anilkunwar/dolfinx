@@ -54,18 +54,21 @@ class Constant(ufl.Coefficient):
 
         array = numpy.array(value)
         rank = len(array.shape)
-        floats = list(map(float, array.flat))
+        if cpp.common.has_petsc_complex():
+            value_list = list(map(numpy.complex128, array.flat))
+        else:
+            value_list = list(map(float, array.flat))
 
         # Create UFL element and initialize constant
         if rank == 0:
             ufl_element = ufl.FiniteElement("Real", cell, 0)
-            self._cpp_object = cpp.function.Constant(floats[0])
+            self._cpp_object = cpp.function.Constant(value_list[0])
         elif rank == 1:
-            ufl_element = ufl.VectorElement("Real", cell, 0, dim=len(floats))
-            self._cpp_object = cpp.function.Constant(floats)
+            ufl_element = ufl.VectorElement("Real", cell, 0, dim=len(value_list))
+            self._cpp_object = cpp.function.Constant(value_list)
         else:
             ufl_element = ufl.TensorElement("Real", cell, 0, shape=array.shape)
-            self._cpp_object = cpp.function.Constant(list(array.shape), floats)
+            self._cpp_object = cpp.function.Constant(list(array.shape), value_list)
 
         # Initialize base classes
         ufl_function_space = ufl.FunctionSpace(ufl_domain, ufl_element)
@@ -73,7 +76,7 @@ class Constant(ufl.Coefficient):
 
         # Set name as given or automatic
         name = name or "f_%d" % self.count()
-        self.rename(name, "a Constant")
+        self.rename(name)
 
     def assign(self, x):
         if isinstance(x, Constant):
@@ -83,8 +86,8 @@ class Constant(ufl.Coefficient):
     def cell(self):
         return self.ufl_element().cell()
 
-    def compute_vertex_values(self, mesh):
-        return self._cpp_object.compute_vertex_values(mesh)
+    def compute_point_values(self, mesh):
+        return self._cpp_object.compute_point_values(mesh)
 
     def values(self):
         return self._cpp_object.values()
@@ -98,8 +101,8 @@ class Constant(ufl.Coefficient):
     def name(self):
         return self._cpp_object.name()
 
-    def rename(self, name, s):
-        self._cpp_object.rename(name, s)
+    def rename(self, name):
+        self._cpp_object.rename(name)
 
     def __float__(self):
         # Overriding UFL operator in this particular case.

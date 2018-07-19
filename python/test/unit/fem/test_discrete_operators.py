@@ -2,28 +2,20 @@
 
 # Copyright (C) 2015 Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 import pytest
-import numpy as np
-from dolfin import *
+import dolfin
+from math import sqrt
+from dolfin import FunctionSpace, UnitSquareMesh, UnitCubeMesh, MPI
+from dolfin.cpp.fem import DiscreteOperators
 
-from dolfin_utils.test import *
+from dolfin_utils.test import skip_in_parallel
 
 
+@skip_in_parallel
 def test_gradient():
     """Test discrete gradient computation (typically used for curl-curl
     AMG preconditioners"""
@@ -34,11 +26,12 @@ def test_gradient():
 
         G = DiscreteOperators.build_gradient(W, V)
         num_edges = mesh.num_entities_global(1)
-        assert G.size(0) == num_edges
-        assert G.size(1) == mesh.num_entities_global(0)
-        assert round(G.norm("frobenius") - sqrt(2.0*num_edges), 8) == 0.0
+        assert G.size()[0] == num_edges
+        assert G.size()[1] == mesh.num_entities_global(0)
+        assert round(G.norm(dolfin.cpp.la.Norm.frobenius) - sqrt(2.0 * num_edges), 8) == 0.0
 
-    meshes = [UnitSquareMesh(11, 6), UnitCubeMesh(4, 3, 7)]
+    meshes = [UnitSquareMesh(MPI.comm_world, 11, 6),
+              UnitCubeMesh(MPI.comm_world, 4, 3, 7)]
     for mesh in meshes:
         compute_discrete_gradient(mesh)
 
@@ -46,16 +39,16 @@ def test_gradient():
 def test_incompatible_spaces():
     "Test that error is thrown when function spaces are not compatible"
 
-    mesh = UnitSquareMesh(13, 7)
+    mesh = UnitSquareMesh(MPI.comm_world, 13, 7)
     V = FunctionSpace(mesh, "Lagrange", 1)
     W = FunctionSpace(mesh, "Nedelec 1st kind H(curl)", 1)
     with pytest.raises(RuntimeError):
-        G = DiscreteOperators.build_gradient(V, W)
+        DiscreteOperators.build_gradient(V, W)
     with pytest.raises(RuntimeError):
-        G = DiscreteOperators.build_gradient(V, V)
+        DiscreteOperators.build_gradient(V, V)
     with pytest.raises(RuntimeError):
-        G = DiscreteOperators.build_gradient(W, W)
+        DiscreteOperators.build_gradient(W, W)
 
     V = FunctionSpace(mesh, "Lagrange", 2)
     with pytest.raises(RuntimeError):
-        G = DiscreteOperators.build_gradient(W, V)
+        DiscreteOperators.build_gradient(W, V)

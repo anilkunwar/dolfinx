@@ -4,22 +4,12 @@ smoothed aggregation algerbaric multigrid."""
 
 # Copyright (C) 2014 Garth N. Wells
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
 import numpy as np
+import dolfin
 from dolfin import *
 from dolfin.la import (VectorSpaceBasis, PETScVector, PETScOptions,
                        PETScKrylovSolver)
@@ -41,10 +31,10 @@ def build_nullspace(V, x):
 
     # Build rotational null space basis
     V.sub(0).set_x(nullspace_basis[3], -1.0, 1)
-    V.sub(1).set_x(nullspace_basis[3],  1.0, 0)
-    V.sub(0).set_x(nullspace_basis[4],  1.0, 2)
+    V.sub(1).set_x(nullspace_basis[3], 1.0, 0)
+    V.sub(0).set_x(nullspace_basis[4], 1.0, 2)
     V.sub(2).set_x(nullspace_basis[4], -1.0, 0)
-    V.sub(2).set_x(nullspace_basis[5],  1.0, 1)
+    V.sub(2).set_x(nullspace_basis[5], 1.0, 1)
     V.sub(1).set_x(nullspace_basis[5], -1.0, 2)
 
     for x in nullspace_basis:
@@ -63,7 +53,11 @@ def build_nullspace(V, x):
 
 # mesh = UnitCubeMesh(2, 2, 2)
 mesh = BoxMesh.create(MPI.comm_world, [Point(0, 0, 0), Point(2, 1, 1)], [
-                      12, 12, 12], CellType.Type.tetrahedron)
+                      12, 12, 12], CellType.Type.tetrahedron,
+                      dolfin.cpp.mesh.GhostMode.none)
+cmap = dolfin.fem.create_coordinate_map(mesh.ufl_domain())
+mesh.geometry.coord_mapping = cmap
+
 
 # Function to mark inner surface of pulley
 # def inner_surface(x, on_boundary):
@@ -87,14 +81,14 @@ f = Expression(("0.0", "1.0e10", "0.0"), degree=2)
 # Elasticity parameters
 E = 1.0e9
 nu = 0.0
-mu = E/(2.0*(1.0 + nu))
-lmbda = E*nu/((1.0 + nu)*(1.0 - 2.0*nu))
+mu = E / (2.0 * (1.0 + nu))
+lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
 
 # Stress computation
 
 
 def sigma(v):
-    return 2.0*mu*sym(grad(v)) + lmbda*tr(sym(grad(v)))*Identity(len(v))
+    return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
 
 
 # Create function space
@@ -103,8 +97,8 @@ V = VectorFunctionSpace(mesh, "Lagrange", 1)
 # Define variational problem
 u = TrialFunction(V)
 v = TestFunction(V)
-a = inner(sigma(u), grad(v))*dx
-L = inner(f, v)*dx
+a = inner(sigma(u), grad(v)) * dx
+L = inner(f, v) * dx
 
 # Set up boundary condition on inner surface
 c = Constant((0.0, 0.0, 0.0))
@@ -124,9 +118,9 @@ null_space = build_nullspace(V, u.vector())
 
 # Attach near nullspace to matrix
 A.set_near_nullspace(null_space)
-# as_backend_type(A).set_near_nullspace(null_space)
 
 # Set solver options
+PETScOptions.set("ksp_view")
 PETScOptions.set("ksp_type", "cg")
 PETScOptions.set("ksp_rtol", 1.0e-12)
 PETScOptions.set("pc_type", "gamg")
@@ -155,16 +149,16 @@ solver.solve(u.vector(), b)
 
 # Save solution to XDMF format
 file = XDMFFile(MPI.comm_world, "elasticity.xdmf")
-file.write(u, XDMFFile.Encoding.ASCII)
+file.write(u)
 
-unorm = u.vector().norm("l2")
+unorm = u.vector().norm(dolfin.cpp.la.Norm.l2)
 if MPI.rank(mesh.mpi_comm()) == 0:
     print("Solution vector norm:", unorm)
 
 
 # Save colored mesh partitions in VTK format if running in parallel
 # if MPI.size(mesh.mpi_comm()) > 1:
-#    File("partitions.pvd") << MeshFunction("size_t", mesh, mesh.topology().dim(), \
+#    File("partitions.pvd") << MeshFunction("size_t", mesh, mesh.topology.dim, \
 #                                           MPI.rank(mesh.mpi_comm()))
 
 # Project and write stress field to post-processing file

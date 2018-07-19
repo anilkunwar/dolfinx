@@ -21,6 +21,7 @@
 
 import pytest
 import dolfin
+from numba import cfunc, types, carray
 
 
 @pytest.fixture
@@ -33,14 +34,17 @@ def V(mesh):
     return dolfin.FunctionSpace(mesh, 'CG', 1)
 
 
-def test_expression_attach():
-    from numba import cfunc, types, carray
-
+# Define a decorator for dolfin numba expressions
+def numba_expression(func):
     c_sig = types.void(types.CPointer(types.double),
                        types.CPointer(types.double),
                        types.intc, types.intc, types.intc)
+    return cfunc(c_sig, nopython=True)(func)
 
-    @cfunc(c_sig, nopython=True)
+
+def test_expression_attach():
+
+    @numba_expression
     def my_callback(value, x, np, gdim, vdim):
         x_array = carray(x, (np, gdim))
         val_array = carray(value, (np, vdim))
@@ -61,6 +65,32 @@ def test_expression_attach():
 
     e.eval(vals, x)
     print("Test2: ", vals)
-    #assert vals == 13.0
+    assert vals[0] == 13.0
+    assert vals[1] == 4.0
 
     # print(my_callback.inspect_llvm())
+
+
+def test_vector_expression():
+
+    @numba_expression
+    def vec_fun(_v, _x, np, gdim, vdim):
+        x = carray(_x, (np, gdim))
+        vals = carray(_v, (np, vdim))
+        vals[:, 0] = x[:, 0] + x[:, 1]
+        vals[:, 1] = x[:, 0] - x[:, 1]
+
+    from dolfin import cpp
+    e = cpp.function.Expression([1], vec_fun.address)
+
+    import numpy as np
+    vals = np.zeros([2, 2])
+    x = np.array([[3, 10], [1, 3]])
+    print(vals.shape)
+    print(vals)
+    print("-----")
+    print(x.shape)
+    print(x)
+
+    e.eval(vals, x)
+    print("Test2: ", vals)

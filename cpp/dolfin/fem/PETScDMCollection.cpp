@@ -8,18 +8,18 @@
 #include <boost/multi_array.hpp>
 #include <dolfin/common/IndexMap.h>
 #include <dolfin/common/RangedIndexSet.h>
+#include <dolfin/fem/CoordinateMapping.h>
 #include <dolfin/fem/FiniteElement.h>
 #include <dolfin/fem/GenericDofMap.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/geometry/BoundingBoxTree.h>
 #include <dolfin/la/PETScMatrix.h>
-#include <dolfin/la/PETScVector.h>
 #include <dolfin/log/log.h>
 #include <dolfin/mesh/Cell.h>
 #include <dolfin/mesh/MeshIterator.h>
-#include <petscmat.h>
 #include <petscdmshell.h>
+#include <petscmat.h>
 
 using namespace dolfin;
 using namespace dolfin::fem;
@@ -63,21 +63,32 @@ tabulate_coordinates_to_dofs(const function::FunctionSpace& V)
       coords_to_dofs(lt_coordinate(1.0e-12));
 
   // Extract mesh, dofmap and element
-  dolfin_assert(V.dofmap());
-  dolfin_assert(V.element());
-  dolfin_assert(V.mesh());
+  assert(V.dofmap());
+  assert(V.element());
+  assert(V.mesh());
   const fem::GenericDofMap& dofmap = *V.dofmap();
   const fem::FiniteElement& element = *V.element();
   const mesh::Mesh& mesh = *V.mesh();
-  std::vector<std::size_t> local_to_global;
-  dofmap.tabulate_local_to_global_dofs(local_to_global);
+  std::vector<std::size_t> local_to_global
+      = dofmap.tabulate_local_to_global_dofs();
 
   // Geometric dimension
   const std::size_t gdim = mesh.geometry().dim();
 
+  // Get dof coordinates on reference element
+  const EigenRowArrayXXd& X = element.dof_reference_coordinates();
+
+  // Get coordinate mapping
+  if (!mesh.geometry().coord_mapping)
+  {
+    throw std::runtime_error(
+        "CoordinateMapping has not been attached to mesh.");
+  }
+  const CoordinateMapping& cmap = *mesh.geometry().coord_mapping;
+
   // Loop over cells and tabulate dofs
-  boost::multi_array<double, 2> coordinates;
-  std::vector<double> coordinate_dofs;
+  EigenRowArrayXXd coordinates(element.space_dimension(), gdim);
+  EigenRowArrayXXd coordinate_dofs;
   std::vector<double> coors(gdim);
 
   // Speed up the computations by only visiting (most) dofs once
@@ -89,13 +100,14 @@ tabulate_coordinates_to_dofs(const function::FunctionSpace& V)
   for (auto& cell : mesh::MeshRange<mesh::Cell>(mesh))
   {
     // Get cell coordinates
+    coordinate_dofs.resize(cell.num_vertices(), gdim);
     cell.get_coordinate_dofs(coordinate_dofs);
 
     // Get local-to-global map
     auto dofs = dofmap.cell_dofs(cell.index());
 
     // Tabulate dof coordinates on cell
-    element.tabulate_dof_coordinates(coordinates, coordinate_dofs, cell);
+    cmap.compute_physical_coordinates(coordinates, X, coordinate_dofs);
 
     // Map dofs into coords_to_dofs
     for (Eigen::Index i = 0; i < dofs.size(); ++i)
@@ -108,7 +120,9 @@ tabulate_coordinates_to_dofs(const function::FunctionSpace& V)
           continue;
 
         // Put coordinates in coors
-        std::copy(coordinates[i].begin(), coordinates[i].end(), coors.begin());
+        std::copy(coordinates.row(i).data(),
+                  coordinates.row(i).data() + coordinates.row(i).size(),
+                  coors.begin());
 
         // Add dof to list at this coord
         const auto ins = coords_to_dofs.insert({coors, {local_to_global[dof]}});
@@ -129,11 +143,11 @@ PETScDMCollection::PETScDMCollection(
 {
   for (std::size_t i = 0; i < _spaces.size(); ++i)
   {
-    dolfin_assert(_spaces[i]);
-    dolfin_assert(_spaces[i].get());
+    assert(_spaces[i]);
+    assert(_spaces[i].get());
 
     // Get MPI communicator from mesh::Mesh
-    dolfin_assert(_spaces[i]->mesh());
+    assert(_spaces[i]->mesh());
     MPI_Comm comm = _spaces[i]->mesh()->mpi_comm();
 
     // Create DM
@@ -177,7 +191,7 @@ PETScDMCollection::~PETScDMCollection()
 //-----------------------------------------------------------------------------
 DM PETScDMCollection::get_dm(int i)
 {
-  dolfin_assert(i >= -(int)_dms.size() and i < (int)_dms.size());
+  assert(i >= -(int)_dms.size() and i < (int)_dms.size());
   const int base = i < 0 ? _dms.size() : 0;
   return _dms[base + i];
 }
@@ -207,9 +221,10 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   // FIXME: refactor and split up
 
   // Get coarse mesh and dimension of the domain
-  dolfin_assert(coarse_space.mesh());
+  assert(coarse_space.mesh());
   const mesh::Mesh meshc = *coarse_space.mesh();
-  std::size_t dim = meshc.geometry().dim();
+  std::size_t gdim = meshc.geometry().dim();
+  std::size_t tdim = meshc.topology().dim();
 
   // MPI communicator, size and rank
   const MPI_Comm mpi_comm = meshc.mpi_comm();
@@ -231,9 +246,8 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   std::size_t N = coarse_space.dim();
 
   // Local dimension of the dofs and of the transfer matrix
-  std::size_t m = finemap->index_map()->size(common::IndexMap::MapSize::OWNED);
-  std::size_t n
-      = coarsemap->index_map()->size(common::IndexMap::MapSize::OWNED);
+  std::array<std::int64_t, 2> m = finemap->ownership_range();
+  std::array<std::int64_t, 2> n = coarsemap->ownership_range();
 
   // Get finite element for the coarse space. This will be needed to
   // evaluate the basis functions for each cell.
@@ -289,7 +303,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   // found_points[dim*i:dim*(i + 1)] contain the coordinates of the
   // fine point i
   std::vector<double> found_points;
-  found_points.reserve((std::size_t)dim * M / mpi_size);
+  found_points.reserve((std::size_t)gdim * M / mpi_size);
 
   // global_row_indices[data_size*i:data_size*(i + 1)] are the rows associated
   // with
@@ -315,7 +329,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   for (const auto& map_it : coords_to_dofs)
   {
     const std::vector<double>& _x = map_it.first;
-    geometry::Point curr_point(dim, _x.data());
+    geometry::Point curr_point(gdim, _x.data());
 
     // Compute which processes' BBoxes contain the fine point
     found_ranks = treec->compute_process_collisions(curr_point);
@@ -354,10 +368,10 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   std::vector<std::vector<unsigned int>> send_ids(mpi_size);
   for (unsigned int p = 0; p < mpi_size; ++p)
   {
-    unsigned int n_points = recv_found[p].size() / dim;
+    unsigned int n_points = recv_found[p].size() / gdim;
     for (unsigned int i = 0; i < n_points; ++i)
     {
-      const geometry::Point curr_point(dim, &recv_found[p][i * dim]);
+      const geometry::Point curr_point(gdim, &recv_found[p][i * gdim]);
       send_ids[p].push_back(
           treec->compute_first_entity_collision(curr_point, meshc));
     }
@@ -389,8 +403,8 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
       // Point not found remotely, so add to not_found list
       int proc = *(p + 1);
       exterior_points.insert(exterior_points.end(),
-                             &send_found[proc][count[proc] * dim],
-                             &send_found[proc][(count[proc] + 1) * dim]);
+                             &send_found[proc][count[proc] * gdim],
+                             &send_found[proc][(count[proc] + 1) * gdim]);
       exterior_global_indices.insert(
           exterior_global_indices.end(),
           &send_found_global_row_indices[proc][count[proc] * data_size],
@@ -427,12 +441,11 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   {
     const auto& id_p = send_ids[p];
     const unsigned int npoints = id_p.size();
-    dolfin_assert(npoints == recv_found[p].size() / dim);
-    dolfin_assert(npoints
-                  == recv_found_global_row_indices[p].size() / data_size);
+    assert(npoints == recv_found[p].size() / gdim);
+    assert(npoints == recv_found_global_row_indices[p].size() / data_size);
 
     const boost::multi_array_ref<double, 2> point_p(
-        recv_found[p].data(), boost::extents[npoints][dim]);
+        recv_found[p].data(), boost::extents[npoints][gdim]);
     const boost::multi_array_ref<int, 2> global_idx_p(
         recv_found_global_row_indices[p].data(),
         boost::extents[npoints][data_size]);
@@ -455,7 +468,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
 
   // Find closest cells for points that lie outside the domain and add
   // them to the lists
-  find_exterior_points(mpi_comm, meshc, treec, dim, data_size, exterior_points,
+  find_exterior_points(mpi_comm, meshc, treec, gdim, data_size, exterior_points,
                        exterior_global_indices, global_row_indices, found_ids,
                        found_points);
 
@@ -471,10 +484,12 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
 
   // Initialise row and column indices and values of the transfer
   // matrix
-  std::vector<std::vector<dolfin::la_index_t>> col_indices(
-      m_owned, std::vector<dolfin::la_index_t>(eldim));
-  std::vector<std::vector<double>> values(m_owned, std::vector<double>(eldim));
-  std::vector<double> temp_values(eldim * data_size);
+  Eigen::Array<dolfin::la_index_t, Eigen::Dynamic, Eigen::Dynamic,
+               Eigen::RowMajor>
+      col_indices(m_owned, eldim);
+  Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      values(m_owned, eldim);
+  Eigen::Tensor<double, 3, Eigen::RowMajor> temp_values(1, eldim, data_size);
 
   // Initialise global sparsity pattern: record on-process and
   // off-process dependencies of fine dofs
@@ -483,27 +498,37 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
 
   // Initialise local to global dof maps (needed to allocate the
   // entries of the transfer matrix with the correct global indices)
-  std::vector<std::size_t> coarse_local_to_global_dofs;
-  coarsemap->tabulate_local_to_global_dofs(coarse_local_to_global_dofs);
+  std::vector<std::size_t> coarse_local_to_global_dofs
+      = coarsemap->tabulate_local_to_global_dofs();
 
-  std::vector<double> coordinate_dofs; // cell dofs coordinates vector
+  EigenRowArrayXXd coordinate_dofs; // cell dofs coordinates vector
 
   // Loop over the found coarse cells
+  Eigen::Map<const EigenRowArrayXXd> x(found_points.data(), found_ids.size(),
+                                       gdim);
+  const auto cmap = meshc.geometry().coord_mapping;
+  EigenRowArrayXXd X(1, gdim);
+  Eigen::Tensor<double, 3, Eigen::RowMajor> J(1, gdim, tdim);
+  EigenArrayXd detJ(1);
+  Eigen::Tensor<double, 3, Eigen::RowMajor> K(1, tdim, gdim);
+
   for (unsigned int i = 0; i < found_ids.size(); ++i)
   {
     // Get coarse cell id and point
     unsigned int id = found_ids[i];
-    geometry::Point curr_point(dim, &found_points[i * dim]);
 
     // Create coarse cell
     mesh::Cell coarse_cell(meshc, static_cast<std::size_t>(id));
+
     // Get dofs coordinates of the coarse cell
+    coordinate_dofs.resize(coarse_cell.num_vertices(), gdim);
     coarse_cell.get_coordinate_dofs(coordinate_dofs);
 
     // Evaluate the basis functions of the coarse cells at the fine
     // point and store the values into temp_values
-    el->evaluate_basis_all(temp_values.data(), curr_point.coordinates(),
-                           coordinate_dofs.data(), -1);
+
+    cmap->compute_reference_geometry(X, J, detJ, K, x.row(i), coordinate_dofs);
+    el->evaluate_reference_basis(temp_values, X);
 
     // Get the coarse dofs associated with this cell
     auto temp_dofs = coarsemap->cell_dofs(id);
@@ -513,8 +538,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
     {
       const unsigned int fine_row = i * data_size + k;
       const std::size_t global_fine_dof = global_row_indices[fine_row];
-      int p = finemap->index_map()->global_block_index_owner(global_fine_dof
-                                                             / data_size);
+      int p = finemap->index_map()->owner(global_fine_dof / data_size);
 
       // Loop over the coarse dofs and stuff their contributions
       for (unsigned j = 0; j < eldim; j++)
@@ -523,12 +547,11 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
             = coarse_local_to_global_dofs[temp_dofs[j]];
 
         // Set the column
-        col_indices[fine_row][j] = coarse_dof;
+        col_indices(fine_row, j) = coarse_dof;
         // Set the value
-        values[fine_row][j] = temp_values[data_size * j + k];
+        values(fine_row, j) = temp_values(0, j, k);
 
-        int pc = coarsemap->index_map()->global_block_index_owner(coarse_dof
-                                                                  / data_size);
+        int pc = coarsemap->index_map()->owner(coarse_dof / data_size);
         if (p == pc)
           send_dnnz[p].push_back(global_fine_dof);
         else
@@ -539,16 +562,15 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
 
   // Communicate off-process columns nnz, and flatten to get nnz per
   // row we also keep track of the ownership range
-  std::size_t mbegin = finemap->ownership_range()[0];
-  std::size_t mend = finemap->ownership_range()[1];
+  std::size_t mbegin = m[0];
+  std::size_t mend = m[1];
   std::vector<dolfin::la_index_t> recv_onnz;
   MPI::all_to_all(mpi_comm, send_onnz, recv_onnz);
 
-  std::vector<dolfin::la_index_t> onnz(m, 0);
+  std::vector<dolfin::la_index_t> onnz(m[1] - m[0], 0);
   for (const auto& q : recv_onnz)
   {
-    dolfin_assert(q >= (dolfin::la_index_t)mbegin
-                  and q < (dolfin::la_index_t)mend);
+    assert(q >= (dolfin::la_index_t)mbegin and q < (dolfin::la_index_t)mend);
     ++onnz[q - mbegin];
   }
 
@@ -556,11 +578,10 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   // row
   std::vector<dolfin::la_index_t> recv_dnnz;
   MPI::all_to_all(mpi_comm, send_dnnz, recv_dnnz);
-  std::vector<dolfin::la_index_t> dnnz(m, 0);
+  std::vector<dolfin::la_index_t> dnnz(m[1] - m[0], 0);
   for (const auto& q : recv_dnnz)
   {
-    dolfin_assert(q >= (dolfin::la_index_t)mbegin
-                  and q < (dolfin::la_index_t)mend);
+    assert(q >= (dolfin::la_index_t)mbegin and q < (dolfin::la_index_t)mend);
     ++dnnz[q - mbegin];
   }
 
@@ -571,11 +592,12 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   // Create and initialise the transfer matrix as MATMPIAIJ/MATSEQAIJ
   ierr = MatCreate(mpi_comm, &I);
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
+
   if (mpi_size > 1)
   {
     ierr = MatSetType(I, MATMPIAIJ);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    ierr = MatSetSizes(I, m, n, M, N);
+    ierr = MatSetSizes(I, m[1] - m[0], n[1] - n[0], M, N);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
     ierr = MatMPIAIJSetPreallocation(I, PETSC_DEFAULT, dnnz.data(),
                                      PETSC_DEFAULT, onnz.data());
@@ -585,7 +607,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   {
     ierr = MatSetType(I, MATSEQAIJ);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
-    ierr = MatSetSizes(I, m, n, M, N);
+    ierr = MatSetSizes(I, m[1] - m[0], n[1] - n[0], M, N);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
     ierr = MatSeqAIJSetPreallocation(I, PETSC_DEFAULT, dnnz.data());
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
@@ -595,8 +617,9 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   for (unsigned int fine_row = 0; fine_row < m_owned; ++fine_row)
   {
     PetscInt fine_dof = global_row_indices[fine_row];
-    ierr = MatSetValues(I, 1, &fine_dof, eldim, col_indices[fine_row].data(),
-                        values[fine_row].data(), INSERT_VALUES);
+    ierr
+        = MatSetValues(I, 1, &fine_dof, eldim, col_indices.row(fine_row).data(),
+                       values.row(fine_row).data(), INSERT_VALUES);
     CHKERRABORT(PETSC_COMM_WORLD, ierr);
   }
 
@@ -611,6 +634,7 @@ std::shared_ptr<la::PETScMatrix> PETScDMCollection::create_transfer_matrix(
   std::shared_ptr<la::PETScMatrix> ptr = std::make_shared<la::PETScMatrix>(I);
   ierr = MatDestroy(&I);
   CHKERRABORT(PETSC_COMM_WORLD, ierr);
+
   return ptr;
 }
 //-----------------------------------------------------------------------------
@@ -621,7 +645,7 @@ void PETScDMCollection::find_exterior_points(
     const std::vector<int>& send_indices, std::vector<int>& indices,
     std::vector<std::size_t>& cell_ids, std::vector<double>& points)
 {
-  dolfin_assert(send_indices.size() / data_size == send_points.size() / dim);
+  assert(send_indices.size() / data_size == send_points.size() / dim);
   const boost::const_multi_array_ref<int, 2> send_indices_arr(
       send_indices.data(),
       boost::extents[send_indices.size() / data_size][data_size]);
@@ -737,8 +761,8 @@ PetscErrorCode PETScDMCollection::create_interpolation(DM dmc, DM dmf, Mat* mat,
   DMShellGetContext(dmf, (void**)&V1);
 
   // Build interpolation matrix (V0 to V1)
-  dolfin_assert(V0);
-  dolfin_assert(V1);
+  assert(V0);
+  assert(V1);
   std::shared_ptr<la::PETScMatrix> P = create_transfer_matrix(*V0, *V1);
 
   // Copy PETSc matrix pointer and inrease reference count

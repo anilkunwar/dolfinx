@@ -10,6 +10,7 @@
 #include <Eigen/Dense>
 #include <functional>
 #include <ufc.h>
+#include <petscsys.h>
 #include <vector>
 
 namespace dolfin
@@ -23,7 +24,7 @@ namespace mesh
 {
 class Cell;
 class Mesh;
-}
+} // namespace mesh
 
 namespace function
 {
@@ -72,11 +73,13 @@ public:
   ///         The values at the point.
   /// @param    x (Eigen::Ref<const Eigen::VectorXd>)
   ///         The coordinates of the point.
-  /// @param    cell (ufc::cell)
+  /// @param    cell (mesh::Cell)
   ///         The cell which contains the given point.
-  virtual void eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x,
-                    const ufc::cell& cell) const override;
+  virtual void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                            Eigen::Dynamic, Eigen::RowMajor>>
+                        values,
+                    Eigen::Ref<const EigenRowArrayXXd> x,
+                    const dolfin::mesh::Cell& cell) const override;
 
   /// Evaluate at given point.
   ///
@@ -84,8 +87,10 @@ public:
   ///         The values at the point.
   /// @param x (Eigen::Ref<const Eigen::VectorXd>)
   ///         The coordinates of the point.
-  virtual void eval(Eigen::Ref<EigenRowMatrixXd> values,
-                    Eigen::Ref<const EigenRowMatrixXd> x) const override;
+  virtual void eval(Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                            Eigen::Dynamic, Eigen::RowMajor>>
+                        values,
+                    Eigen::Ref<const EigenRowArrayXXd> x) const override;
 
   /// Return value rank.
   ///
@@ -111,12 +116,12 @@ public:
   /// Property setter for type "double"
   /// Used in pybind11 Python interface to attach a value to a python attribute
   ///
-  virtual void set_property(std::string name, double value);
+  virtual void set_property(std::string name, PetscScalar value);
 
   /// Property getter for type "double"
   /// Used in pybind11 Python interface to get the value of a python attribute
   ///
-  virtual double get_property(std::string name) const;
+  virtual PetscScalar get_property(std::string name) const;
 
   /// Property setter for type "GenericFunction"
   /// Used in pybind11 Python interface to attach a value to a python attribute
@@ -132,7 +137,7 @@ public:
 
   /// Restrict function to local cell (compute expansion coefficients w).
   ///
-  /// @param    w (list of doubles)
+  /// @param    w (list of PetscScalar)
   ///         Expansion coefficients.
   /// @param    element (_FiniteElement_)
   ///         The element.
@@ -140,12 +145,10 @@ public:
   ///         The cell.
   /// @param  coordinate_dofs (double*)
   ///         The coordinates
-  /// @param    ufc_cell (ufc::cell)
-  ///         The ufc::cell.
-  virtual void restrict(double* w, const fem::FiniteElement& element,
-                        const mesh::Cell& dolfin_cell,
-                        const double* coordinate_dofs,
-                        const ufc::cell& ufc_cell) const override;
+  virtual void restrict(
+      PetscScalar* w, const fem::FiniteElement& element,
+      const mesh::Cell& dolfin_cell,
+      const Eigen::Ref<const EigenRowArrayXXd>& coordinate_dofs) const override;
 
   /// Compute values at all mesh vertices.
   ///
@@ -153,8 +156,9 @@ public:
   ///         The mesh.
   /// @returns    vertex_values (EigenRowArrayXXd)
   ///         The values at all vertices.
-  virtual EigenRowArrayXXd
-  compute_vertex_values(const mesh::Mesh& mesh) const override;
+  virtual Eigen::Array<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                       Eigen::RowMajor>
+  compute_point_values(const mesh::Mesh& mesh) const override;
 
   /// Return shared pointer to function space (NULL)
   /// Expression does not have a FunctionSpace
@@ -169,5 +173,5 @@ private:
 
   std::function<void(double*, const double*, int, int, int)> _eval;
 };
-}
-}
+} // namespace function
+} // namespace dolfin

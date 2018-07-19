@@ -1,31 +1,18 @@
-"""Unit tests for the HDF5 io library - timeseries io"""
-
 # Copyright (C) 2014 Chris Richardson
 #
-# This file is part of DOLFIN.
+# This file is part of DOLFIN (https://www.fenicsproject.org)
 #
-# DOLFIN is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# DOLFIN is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with DOLFIN. If not, see <http://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier:    LGPL-3.0-or-later
 
-import pytest
 import os
-from dolfin import *
-from dolfin_utils.test import skip_if_not_HDF5, fixture, tempdir, \
-    xfail_with_serial_hdf5_in_parallel
+from dolfin import (UnitSquareMesh, MPI, FunctionSpace, Function, Expression, HDF5File)
+from dolfin_utils.test import (skip_if_not_HDF5, tempdir, xfail_if_complex,
+                               xfail_with_serial_hdf5_in_parallel)
 import dolfin.io
+assert(tempdir)
 
 
+@xfail_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_function_timeseries(tempdir):
@@ -53,8 +40,8 @@ def test_save_and_read_function_timeseries(tempdir):
         F1.interpolate(E)
         vec_name = "/function/vector_%d" % t
         F0 = hdf5_file.read_function(Q, vec_name)
-        #timestamp = hdf5_file.attributes(vec_name)["timestamp"]
-        #assert timestamp == t
-        result = F0.vector() - F1.vector()
-        assert len(result.get_local().nonzero()[0]) == 0
+        # timestamp = hdf5_file.attributes(vec_name)["timestamp"]
+        # assert timestamp == t
+        F0.vector().axpy(-1.0, F1.vector())
+        assert F0.vector().norm(dolfin.cpp.la.Norm.l2) < 1.0e-12
     hdf5_file.close()
