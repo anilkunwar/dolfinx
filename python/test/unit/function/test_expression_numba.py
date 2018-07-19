@@ -20,18 +20,24 @@
 # Modified by Benjamin Kehlet 2012
 
 import pytest
-import dolfin
+from dolfin import (interpolate, UnitCubeMesh, FunctionSpace, VectorFunctionSpace,
+                    Cells, MPI, cpp)
 from numba import cfunc, types, carray
 
 
 @pytest.fixture
 def mesh():
-    return dolfin.UnitCubeMesh(dolfin.MPI.comm_world, 8, 8, 8)
+    return UnitCubeMesh(MPI.comm_world, 2, 2, 2)
+
+
+@pytest.fixture
+def Q(mesh):
+    return FunctionSpace(mesh, 'CG', 1)
 
 
 @pytest.fixture
 def V(mesh):
-    return dolfin.FunctionSpace(mesh, 'CG', 1)
+    return VectorFunctionSpace(mesh, 'CG', 1)
 
 
 # Define a decorator for dolfin numba expressions
@@ -42,7 +48,7 @@ def numba_expression(func):
     return cfunc(c_sig, nopython=True)(func)
 
 
-def test_expression_attach():
+def test_scalar_expression(Q):
 
     @numba_expression
     def my_callback(value, x, np, gdim, vdim):
@@ -51,8 +57,7 @@ def test_expression_attach():
         val_array[:, 0] = x_array[:, 0] + x_array[:, 1]
 
     # print("Test: ", my_callback.address)
-    from dolfin import cpp
-    e = cpp.function.Expression([0], my_callback.address)
+    e = cpp.function.Expression([], my_callback.address)
 
     import numpy as np
     vals = np.zeros([2, 1])
@@ -68,10 +73,11 @@ def test_expression_attach():
     assert vals[0] == 13.0
     assert vals[1] == 4.0
 
-    # print(my_callback.inspect_llvm())
+    F = interpolate(e, Q)
+    assert np.isclose(sum(F.vector().get_local()), 27.0)
 
 
-def test_vector_expression():
+def test_vector_expression(V):
 
     @numba_expression
     def vec_fun(_v, _x, np, gdim, vdim):
@@ -79,9 +85,10 @@ def test_vector_expression():
         vals = carray(_v, (np, vdim))
         vals[:, 0] = x[:, 0] + x[:, 1]
         vals[:, 1] = x[:, 0] - x[:, 1]
+        vals[:, 2] = 1.0
 
     from dolfin import cpp
-    e = cpp.function.Expression([1], vec_fun.address)
+    e = cpp.function.Expression([3], vec_fun.address)
 
     import numpy as np
     vals = np.zeros([2, 2])
@@ -94,3 +101,12 @@ def test_vector_expression():
 
     e.eval(vals, x)
     print("Test2: ", vals)
+
+    F = interpolate(e, V)
+
+    for c in Cells(V.mesh()):
+        p = c.midpoint().array()
+        val = F(p)
+        assert np.isclose(val[0][0], p[0] + p[1])
+        assert np.isclose(val[0][1], p[0] - p[1])
+        assert np.isclose(val[0][2], 1.0)
