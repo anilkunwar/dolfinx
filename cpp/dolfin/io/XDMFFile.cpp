@@ -1707,7 +1707,7 @@ XDMFFile::read_checkpoint(std::shared_ptr<const function::FunctionSpace> V,
       = MPI::local_range(_mpi_comm.comm(), num_global_dofs);
 
   // Read function vector
-  std::vector<double> vector = get_dataset<PetscScalar>(
+  std::vector<double> vector = get_dataset<double>(
       _mpi_comm.comm(), vector_dataitem, parent_path, input_vector_range);
 
   function::Function u(V);
