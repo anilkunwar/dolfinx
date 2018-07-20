@@ -18,6 +18,8 @@ if has_hdf5():
 
 assert(tempdir)
 
+pytestmark = xfail_if_complex
+
 
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
