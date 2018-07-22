@@ -565,17 +565,19 @@ private:
   std::unique_ptr<HDF5File> _hdf5_file;
 #endif
 
+  // HDF file handler
+  hid_t _h5_id = -1;
+
   // Cached filename
   const std::string _filename;
-
-  // Counter for time series
-  std::size_t _counter;
 
   // The XML document currently representing the XDMF which needs to be
   // kept open for time series etc.
   std::unique_ptr<pugi::xml_document> _xml_doc;
 
   const Encoding _encoding;
+
+  const std::string _file_mode;
 };
 
 #ifndef DOXYGEN_IGNORE
