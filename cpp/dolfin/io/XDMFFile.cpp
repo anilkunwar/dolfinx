@@ -75,11 +75,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     }
   }
 
-  switch (_file_mode)
-  {
-  // This switch takes care of XML file only
-
-  case "a":
+  if (_file_mode == "a")
   {
     // In append mode an existing XML tree is checked for valid header
     // Invalid XML is thrown away and new is prepared
@@ -90,7 +86,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     {
       throw std::runtime_error(
           "Failed to load XDMF XML file for appending. Description: \n"
-          + result.description());
+          + std::string(result.description()));
     }
 
     if (_xml_doc->select_node("/Xdmf").node().empty())
@@ -104,9 +100,8 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
       xdmf_node.append_attribute("xmlns:xi")
           = "http://www.w3.org/2001/XInclude";
     }
-    break;
   }
-  case "r":
+  else if (_file_mode == "r")
   {
     // In read mode we must open valid XML file
 
@@ -116,7 +111,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     {
       throw std::runtime_error(
           "Failed to load XDMF XML file for reading. Description: \n"
-          + result.description());
+          + std::string(result.description()));
     }
 
     if (_xml_doc->select_node("/Xdmf").node().empty())
@@ -125,9 +120,8 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
       throw std::runtime_error(
           "Failed to read XDMF XML. Corrupted XML structure.");
     }
-    break;
   }
-  case "w":
+  else if (_file_mode == "w")
   {
     // In write mode XML tree is thrown away and new header is prepared
 
@@ -138,11 +132,9 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     pugi::xml_node xdmf_node = _xml_doc->append_child("Xdmf");
     xdmf_node.append_attribute("Version") = "3.0";
     xdmf_node.append_attribute("xmlns:xi") = "http://www.w3.org/2001/XInclude";
-    break;
   }
-  default:
+  else
     throw std::runtime_error("File mode " + _file_mode + " not recognized.");
-  }
 
 #ifdef HAS_HDF5
   if (_file_mode != "r" and _encoding == XDMFFile::Encoding::HDF5)
@@ -235,7 +227,7 @@ void XDMFFile::write_checkpoint(const function::Function& u,
       = function_name + "_" + std::to_string(counter);
 
   const mesh::Mesh& mesh = *u.function_space()->mesh();
-  add_mesh(_mpi_comm.comm(), func_temporal_grid_node, h5_id, mesh,
+  add_mesh(_mpi_comm.comm(), func_temporal_grid_node, _h5_id, mesh,
            function_name + "/" + function_time_name);
 
   // Get newly (by add_mesh) created Grid
@@ -256,7 +248,7 @@ void XDMFFile::write_checkpoint(const function::Function& u,
   // Write function
   //
 
-  add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
+  add_function(_mpi_comm.comm(), mesh_grid_node, _h5_id,
                function_name + "/" + function_time_name, u, function_name,
                mesh);
 
@@ -277,7 +269,7 @@ void XDMFFile::write_checkpoint(const function::Function& u,
                        "file will be flushed (closed).");
 
     assert(_hdf5_file);
-    _hdf5_file.flush();
+    _hdf5_file->flush();
   }
 #endif
 }
@@ -464,7 +456,7 @@ void XDMFFile::write(const function::Function& u, double time_step)
   if (_encoding == Encoding::HDF5 and parameters["flush_output"])
   {
     assert(_hdf5_file);
-    _hdf5_file.flush();
+    _hdf5_file->flush();
   }
 #endif
 }
@@ -624,7 +616,7 @@ void XDMFFile::write_mesh_value_collection(
     value_data.push_back(p.second);
   }
 
-  const std::size_t counter = domain_node.select_node("Grid").size();
+  const std::size_t counter = domain_node.select_nodes("Grid").size();
   const std::string mvc_dataset_name
       = "/MeshValueCollection/" + std::to_string(counter);
   const std::int64_t num_values = MPI::sum(mesh->mpi_comm(), value_data.size());
@@ -1957,17 +1949,9 @@ mesh::MeshFunction<T>
 XDMFFile::read_mesh_function(std::shared_ptr<const mesh::Mesh> mesh,
                              std::string name) const
 {
-  // Load XML doc from file
-  pugi::xml_document xml_doc;
-  pugi::xml_parse_result result = xml_doc.load_file(_filename.c_str());
-  assert(result);
-
-  // Get XDMF node
-  pugi::xml_node xdmf_node = xml_doc.child("Xdmf");
-  assert(xdmf_node);
 
   // Get domain node
-  pugi::xml_node domain_node = xdmf_node.child("Domain");
+  pugi::xml_node domain_node = _xml_doc->child("Xdmf").child("Domain");
   assert(domain_node);
 
   // Check all top level Grid nodes for suitable dataset
@@ -2218,18 +2202,8 @@ std::string XDMFFile::get_hdf5_filename(std::string xdmf_filename)
 template <typename T>
 void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
 {
-  // Check that encoding
-  if (_encoding == Encoding::HDF5 and !has_hdf5())
-  {
-    throw std::runtime_error("DOLFIN has not been compiled with HDF5 support. "
-                             "Cannot write XDMF in HDF5 encoding.");
-  }
-
-  if (_encoding == Encoding::ASCII and _mpi_comm.size() != 1)
-  {
-    throw std::runtime_error(
-        "Cannot write ASCII XDMF in parallel (use HDF5 encoding).");
-  }
+  if (_file_mode == "r")
+    throw std::runtime_error("Unable to write in read mode.");
 
   if (meshfunction.size() == 0)
   {
@@ -2241,50 +2215,7 @@ void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
   assert(meshfunction.mesh());
   std::shared_ptr<const mesh::Mesh> mesh = meshfunction.mesh();
 
-  // Check if _xml_doc already has data. If not, create an outer structure
-  // If it already has data, then we may append to it.
-
-  pugi::xml_node domain_node;
-  std::string hdf_filemode = "a";
-  if (_xml_doc->child("Xdmf").empty())
-  {
-    // Reset pugi
-    _xml_doc->reset();
-
-    // Add XDMF node and version attribute
-    _xml_doc->append_child(pugi::node_doctype)
-        .set_value("Xdmf SYSTEM \"Xdmf.dtd\" []");
-    pugi::xml_node xdmf_node = _xml_doc->append_child("Xdmf");
-    assert(xdmf_node);
-    xdmf_node.append_attribute("Version") = "3.0";
-    xdmf_node.append_attribute("xmlns:xi") = "http://www.w3.org/2001/XInclude";
-
-    // Add domain node and add name attribute
-    domain_node = xdmf_node.append_child("Domain");
-    hdf_filemode = "w";
-  }
-  else
-    domain_node = _xml_doc->child("Xdmf").child("Domain");
-
-  assert(domain_node);
-
-  // Open a HDF5 file if using HDF5 encoding
-  hid_t h5_id = -1;
-#ifdef HAS_HDF5
-  std::unique_ptr<HDF5File> h5_file;
-  if (_encoding == Encoding::HDF5)
-  {
-    // Open file
-    h5_file = std::make_unique<HDF5File>(
-        mesh->mpi_comm(), get_hdf5_filename(_filename), hdf_filemode);
-    assert(h5_file);
-
-    // Get file handle
-    h5_id = h5_file->h5_id();
-  }
-#endif
-
-  const std::string mf_name = "/MeshFunction/" + std::to_string(_counter);
+  const std::string mf_name = "/MeshFunction/" + meshfunction.name();
 
   // If adding a mesh::MeshFunction of topology dimension dim() to an existing
   // mesh::Mesh,
@@ -2292,6 +2223,7 @@ void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
   // FIXME: do some checks on the existing mesh::Mesh to make sure it is the
   // same
   // as the meshfunction's mesh.
+  pugi::xml_node domain_node = _xml_doc->child("Xdmf").child("Domain");
   pugi::xml_node grid_node = domain_node.child("Grid");
   const std::size_t cell_dim = meshfunction.dim();
   const std::size_t tdim = mesh->topology().dim();
@@ -2328,16 +2260,16 @@ void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
 
     const std::int64_t num_global_cells = mesh->num_entities_global(cell_dim);
     if (num_global_cells < 1e9)
-      add_topology_data<std::int32_t>(_mpi_comm.comm(), grid_node, h5_id,
+      add_topology_data<std::int32_t>(_mpi_comm.comm(), grid_node, _h5_id,
                                       mf_name, *mesh, cell_dim);
     else
-      add_topology_data<std::int64_t>(_mpi_comm.comm(), grid_node, h5_id,
+      add_topology_data<std::int64_t>(_mpi_comm.comm(), grid_node, _h5_id,
                                       mf_name, *mesh, cell_dim);
 
     // Add geometry node if none already, else link back to first existing
     // mesh::Mesh
     if (grid_empty)
-      add_geometry_data(_mpi_comm.comm(), grid_node, h5_id, mf_name, *mesh);
+      add_geometry_data(_mpi_comm.comm(), grid_node, _h5_id, mf_name, *mesh);
     else
     {
       // Add geometry node (reference)
@@ -2362,16 +2294,12 @@ void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
   // Copy values to vector, removing duplicates
   std::vector<T> values = compute_value_data(meshfunction);
 
-  add_data_item(_mpi_comm.comm(), attribute_node, h5_id, mf_name + "/values",
+  add_data_item(_mpi_comm.comm(), attribute_node, _h5_id, mf_name + "/values",
                 values, {num_values, 1});
 
   // Save XML file (on process 0 only)
   if (_mpi_comm.rank() == 0)
     _xml_doc->save_file(_filename.c_str(), "  ");
-
-  // Increment the counter, so we can save multiple mesh::MeshFunctions in one
-  // file
-  ++_counter;
 }
 //-----------------------------------------------------------------------------
 std::vector<double> XDMFFile::get_cell_data_values(const function::Function& u)

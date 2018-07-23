@@ -106,7 +106,7 @@ public:
 
   /// Constructor
   XDMFFile(MPI_Comm comm, const std::string filename,
-           Encoding encoding = default_encoding);
+           const std::string filemode, Encoding encoding = default_encoding);
 
   /// Destructor
   ~XDMFFile();
