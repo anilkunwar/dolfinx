@@ -189,7 +189,7 @@ for later visualization and also plot it using
 the :py:func:`plot <dolfin.common.plot.plot>` command: ::
 
     # Save solution in XDMF format
-    with XDMFFile(MPI.comm_world, "poisson.xdmf",
+    with XDMFFile(MPI.comm_world, "poisson.xdmf", "w",
                   encoding=XDMFFile.Encoding.HDF5) as file:
         file.write(u)
 

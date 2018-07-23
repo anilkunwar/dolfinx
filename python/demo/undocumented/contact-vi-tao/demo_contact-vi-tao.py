@@ -109,7 +109,7 @@ parameters.parse()
 solver.solve(ContactProblem(), u.vector(), u_min.vector(), u_max.vector())
 
 # Save solution in XDMF format if available
-out = XDMFFile(mesh.mpi_comm(), "u.xdmf")
+out = XDMFFile(mesh.mpi_comm(), "u.xdmf", "w")
 if has_hdf5():
     out.write(u)
 elif MPI.size(mesh.mpi_comm()) == 1:

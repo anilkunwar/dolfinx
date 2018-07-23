@@ -149,7 +149,7 @@ solver.set_operator(A)
 solver.solve(u.vector(), b)
 
 # Save solution to XDMF format
-file = XDMFFile(MPI.comm_world, "elasticity.xdmf")
+file = XDMFFile(MPI.comm_world, "elasticity.xdmf", "w")
 file.write(u)
 
 unorm = u.vector().norm(dolfin.cpp.la.Norm.l2)

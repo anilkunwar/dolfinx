@@ -88,7 +88,7 @@ following way::
     from dolfin.io import XDMFFile
 
     # Load mesh and subdomains
-    xdmf = XDMFFile(MPI.comm_world, "../dolfin_fine.xdmf")
+    xdmf = XDMFFile(MPI.comm_world, "../dolfin_fine.xdmf", "r")
     mesh = xdmf.read_mesh(MPI.comm_world, dolfin.cpp.mesh.GhostMode.none)
     sub_domains = xdmf.read_mf_size_t(mesh)
 
