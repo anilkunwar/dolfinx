@@ -1451,7 +1451,7 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   }
 
   add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path +"/" + component +  "/vector",
-            component_data_values, {(std::int64_t)u_vector.local_size(), 1}, "Float");
+            component_data_values, {(std::int64_t)u_vector.size(), 1}, "Float");
 #else
   std::vector<double> local_data;
   u_vector.get_local(local_data);
