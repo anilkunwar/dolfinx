@@ -144,9 +144,9 @@ class XDMFFile:
             Encoding used for 'heavy' data when writing/appending
 
         """
-        if filemode == "r" and encoding != None:
+        if filemode == "r" and encoding is not None:
             raise TypeError("Encoding cannot be specified for \"r\" filemode.")
-        if encoding == None:
+        if encoding is None:
             self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename, filemode,
                                                XDMFFile.Encoding.HDF5)
         else:
