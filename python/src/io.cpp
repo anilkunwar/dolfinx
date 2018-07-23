@@ -141,11 +141,13 @@ void io(py::module& m)
 
   xdmf_file
       .def(py::init([](const MPICommWrapper comm, std::string filename,
+                       const std::string filemode,
                        dolfin::io::XDMFFile::Encoding encoding) {
              return std::make_unique<dolfin::io::XDMFFile>(comm.get(), filename,
-                                                           encoding);
+                                                           filemode, encoding);
            }),
-           py::arg("comm"), py::arg("filename"), py::arg("encoding"))
+           py::arg("comm"), py::arg("filename"), py::arg("filemode"),
+           py::arg("encoding"))
       .def("close", &dolfin::io::XDMFFile::close);
 
   // dolfin::io::XDMFFile::Encoding enums
