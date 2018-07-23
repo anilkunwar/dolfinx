@@ -80,14 +80,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     // In append mode an existing XML tree is checked for valid header
     // Invalid XML is thrown away and new is prepared
 
-    pugi::xml_parse_result result = _xml_doc->load_file(_filename.c_str());
-
-    if (!result)
-    {
-      throw std::runtime_error(
-          "Failed to load XDMF XML file for appending. Description: \n"
-          + std::string(result.description()));
-    }
+    _xml_doc->load_file(_filename.c_str());
 
     if (_xml_doc->select_node("/Xdmf").node().empty())
     {
@@ -99,6 +92,8 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
       xdmf_node.append_attribute("Version") = "3.0";
       xdmf_node.append_attribute("xmlns:xi")
           = "http://www.w3.org/2001/XInclude";
+      pugi::xml_node domain_node = xdmf_node.append_child("Domain");
+      assert(domain_node);
     }
   }
   else if (_file_mode == "r")
@@ -132,6 +127,8 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     pugi::xml_node xdmf_node = _xml_doc->append_child("Xdmf");
     xdmf_node.append_attribute("Version") = "3.0";
     xdmf_node.append_attribute("xmlns:xi") = "http://www.w3.org/2001/XInclude";
+    pugi::xml_node domain_node = xdmf_node.append_child("Domain");
+    assert(domain_node);
   }
   else
     throw std::runtime_error("File mode " + _file_mode + " not recognized.");
@@ -161,11 +158,10 @@ void XDMFFile::write(const mesh::Mesh& mesh)
 {
   if (_file_mode == "r")
     throw std::runtime_error("Unable to write in read mode.");
+  if (_file_mode == "a")
+    throw std::runtime_error("Appendig mesh not implemented.");
 
-  pugi::xml_node xdmf_node = _xml_doc->child("Xdmf");
-  // Add domain node and add name attribute
-  pugi::xml_node domain_node = xdmf_node.append_child("Domain");
-  assert(domain_node);
+  pugi::xml_node domain_node = _xml_doc->child("Xdmf").child("Domain");
 
   // Add the mesh Grid to the domain
   add_mesh(_mpi_comm.comm(), domain_node, _h5_id, mesh, "/Mesh");
@@ -390,7 +386,7 @@ void XDMFFile::write(const function::Function& u, double time_step)
     if (new_timegrid or parameters["rewrite_function_mesh"])
     {
       add_mesh(_mpi_comm.comm(), timegrid_node, _h5_id, mesh,
-               tg_name + "/" + std::to_string(counter));
+               "/Mesh/" + tg_name + "/" + std::to_string(counter));
     }
     else
     {
@@ -2224,6 +2220,7 @@ void XDMFFile::write_mesh_function(const mesh::MeshFunction<T>& meshfunction)
   // same
   // as the meshfunction's mesh.
   pugi::xml_node domain_node = _xml_doc->child("Xdmf").child("Domain");
+  assert(domain_node);
   pugi::xml_node grid_node = domain_node.child("Grid");
   const std::size_t cell_dim = meshfunction.dim();
   const std::size_t tdim = mesh->topology().dim();

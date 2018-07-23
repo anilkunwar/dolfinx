@@ -118,7 +118,7 @@ class XDMFFile:
     # Import encoding (find better way?)
     Encoding = cpp.io.XDMFFile.Encoding
 
-    def __init__(self, mpi_comm, filename: str, encoding=Encoding.HDF5):
+    def __init__(self, mpi_comm, filename: str, filemode: str, encoding=None):
         """Open XDMF file
 
         Parameters
@@ -127,11 +127,31 @@ class XDMFFile:
             The MPI communicator
         filename
             Name of the file
+        filemode
+            C language-style filemode
+
+            =========  ========  ==================  ===================
+            Filemode   Meaning   If file exists      File doesn't exist
+            =========  ========  ==================  ===================
+            "a"        append    write to end        create new
+            "r"        read      read from start     create new
+            "w"        write     destroy content     failure to open
+            =========  ========  ==================  ===================
+
+            For file mode "r" no `encoding` could be specified. In such case
+            encoding is read from file.
         encoding
             Encoding used for 'heavy' data when writing/appending
 
         """
-        self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename, encoding)
+        if filemode == "r" and encoding != None:
+            raise TypeError("Encoding cannot be specified for \"r\" filemode.")
+        if encoding == None:
+            self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename, filemode,
+                                               XDMFFile.Encoding.HDF5)
+        else:
+            self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename, filemode,
+                                               encoding)
 
     def __enter__(self):
         return self
