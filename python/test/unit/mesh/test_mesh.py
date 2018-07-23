@@ -260,7 +260,7 @@ def test_Write(cd_tempdir, f):
     f = f
     f[0] = 1
     f[1] = 2
-    file = XDMFFile(f.mesh().mpi_comm(), "saved_mesh_function.xdmf")
+    file = XDMFFile(f.mesh().mpi_comm(), "saved_mesh_function.xdmf", "w")
     file.write(f)
 
 
