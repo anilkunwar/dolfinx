@@ -273,15 +273,14 @@ void XDMFFile::write_checkpoint(const function::Function& u,
   pugi::xml_node time_node = mesh_grid_node.append_child("Time");
   time_node.append_attribute("Value") = std::to_string(time_step).c_str();
 
-
 #ifdef PETSC_USE_COMPLEX
   std::string component;
   // Write the real component of function u
   component = "real";
   add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
-              function_name + "/" + function_time_name, u, function_name,
-              mesh, component);
-  
+               function_name + "/" + function_time_name, u, function_name, mesh,
+               component);
+
   // Write the imaginary component of function u
   // component = "imag";
   // add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
@@ -290,8 +289,8 @@ void XDMFFile::write_checkpoint(const function::Function& u,
 #else
   // Write function
   add_function(_mpi_comm.comm(), mesh_grid_node, h5_id,
-               function_name + "/" + function_time_name, u, function_name,
-               mesh);
+               function_name + "/" + function_time_name, u, function_name, mesh,
+               "");
 #endif
 
   // Save XML file (on process 0 only)
@@ -1315,8 +1314,7 @@ void XDMFFile::add_mesh(MPI_Comm comm, pugi::xml_node& xml_node, hid_t h5_id,
 void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
                             hid_t h5_id, std::string h5_path,
                             const function::Function& u,
-                            std::string function_name, 
-                            const mesh::Mesh& mesh,
+                            std::string function_name, const mesh::Mesh& mesh,
                             std::string component = "")
 {
   log::log(PROGRESS, "Adding function to node \"%s\"",
@@ -1345,7 +1343,7 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
          {tetrahedron, "tetrahedron"},
          {quadrilateral, "quadrilateral"},
          {hexahedron, "hexahedron"}};
-  
+
   // Check that element is supported
   auto const it = family_abbr.find(element_family);
   if (it == family_abbr.end())
@@ -1367,11 +1365,11 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   const std::string element_cell = it_shape->second;
   // Prepare main Attribute for the FiniteElementFunction type
   std::string attr_name;
-  if (component.empty()) 
+  if (component.empty())
     attr_name = function_name;
   else
     attr_name = component + "_" + function_name;
-  
+
   pugi::xml_node fe_attribute_node = xml_node.append_child("Attribute");
   fe_attribute_node.append_attribute("ItemType") = "FiniteElementFunction";
   fe_attribute_node.append_attribute("ElementFamily") = element_family.c_str();
@@ -1430,6 +1428,7 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   std::vector<PetscScalar> local_data;
   u_vector.get_local(local_data);
 #ifdef PETSC_USE_COMPLEX
+
   std::vector<double> component_data_values(local_data.size());
   for (unsigned int i = 0; i < local_data.size(); i++)
   {
@@ -1439,12 +1438,12 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
       component_data_values[i] = std::imag(local_data[i]);
   }
 
-  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path +"/" + component +  "/vector",
-            component_data_values, {(std::int64_t)u_vector.size(), 1}, "Float");
+  add_data_item(mpi_comm, fe_attribute_node, h5_id,
+                h5_path + "/" + component + "/vector", component_data_values,
+                {(std::int64_t)u_vector.size(), 1}, "Float");
 #else
-  std::vector<double> local_data;
   u_vector.get_local(local_data);
-  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path "/vector",
+  add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/vector",
                 local_data, {(std::int64_t)u_vector.size(), 1}, "Float");
 #endif
 
@@ -1630,12 +1629,22 @@ XDMFFile::read_checkpoint(std::shared_ptr<const function::FunctionSpace> V,
                           + func_name + "']/Grid[" + selector + "]")
                              .c_str())
             .node();
-
   assert(grid_node);
 
+#ifdef PETSC_USE_COMPLEX
   pugi::xml_node fe_attribute_node
-      = grid_node.select_node(("Attribute[@ItemType=\"FiniteElementFunction\" and"
-                              "@Name='real_"+ func_name + "']").c_str()).node();
+      = grid_node
+            .select_node(("Attribute[@ItemType=\"FiniteElementFunction\" and"
+                          "@Name='real_"
+                          + func_name + "']")
+                             .c_str())
+            .node();
+#else
+  pugi::xml_node fe_attribute_node
+      = grid_node.select_node("Attribute[@ItemType=\"FiniteElementFunction\"]")
+            .node();
+#endif
+
   assert(fe_attribute_node);
 
   // Get cells dofs indices = dofmap
