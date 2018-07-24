@@ -1013,8 +1013,9 @@ HDF5File::read(std::shared_ptr<const function::FunctionSpace> V,
   const std::array<std::int64_t, 2> input_vector_range
       = MPI::local_range(_mpi_comm.comm(), vector_shape[0]);
 
-  std::vector<double> input_values = HDF5Interface::read_dataset<double>(
-      _hdf5_file_id, vector_dataset_name, input_vector_range);
+  std::vector<PetscScalar> input_values
+      = HDF5Interface::read_dataset<PetscScalar>(
+          _hdf5_file_id, vector_dataset_name, input_vector_range);
 
   // HDF5Utility::set_local_vector_values(_mpi_comm.comm(), x, mesh,
   // input_cells,
