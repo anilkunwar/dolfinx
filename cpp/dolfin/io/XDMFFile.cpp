@@ -80,6 +80,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
     // In append mode an existing XML tree is checked for valid header
     // Invalid XML is thrown away and new is prepared
 
+    _mpi_comm.barrier();
     _xml_doc->load_file(_filename.c_str());
 
     if (_xml_doc->select_node("/Xdmf").node().empty())
@@ -100,6 +101,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename,
   {
     // In read mode we must open valid XML file
 
+    _mpi_comm.barrier();
     pugi::xml_parse_result result = _xml_doc->load_file(_filename.c_str());
 
     if (!result)
