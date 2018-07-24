@@ -8,14 +8,14 @@ import os
 from dolfin import (UnitSquareMesh, MPI, FunctionSpace, Function, Expression,
                     has_hdf5)
 import dolfin.cpp as cpp
-from dolfin_utils.test import (skip_if_not_HDF5, tempdir, xfail_if_complex,
+from dolfin_utils.test import (skip_if_not_HDF5, tempdir, skip_if_complex,
                                xfail_with_serial_hdf5_in_parallel)
 if has_hdf5():
     from dolfin.io import HDF5File
 assert(tempdir)
 
 
-@xfail_if_complex
+@skip_if_complex
 @skip_if_not_HDF5
 @xfail_with_serial_hdf5_in_parallel
 def test_save_and_read_function_timeseries(tempdir):
