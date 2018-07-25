@@ -93,4 +93,3 @@ setup(name='fenics-dolfin',
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,
       zip_safe=False)
-      

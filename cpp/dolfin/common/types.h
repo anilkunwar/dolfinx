@@ -37,9 +37,6 @@ using EigenRowArrayXd = Eigen::Array<double, 1, Eigen::Dynamic>;
 using EigenRowArrayXXd
     = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-using EigenRowArrayXXcd = Eigen::Array<std::complex<double>, Eigen::Dynamic,
-                                       Eigen::Dynamic, Eigen::RowMajor>;
-
 // int32 Arrays
 using EigenArrayXi32 = Eigen::Array<std::int32_t, Eigen::Dynamic, 1>;
 using EigenRowArrayXi32 = Eigen::Array<std::int32_t, 1, Eigen::Dynamic>;

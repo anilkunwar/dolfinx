@@ -41,34 +41,34 @@ PYBIND11_MODULE(cpp, m)
   py::module common = m.def_submodule("common", "Common module");
   dolfin_wrappers::common(common);
 
-  // // Create MPI class [common]
+  // Create MPI class [common]
   dolfin_wrappers::mpi(m);
 
-  // // Create common submodule [log]
+  // Create common submodule [log]
   py::module log = m.def_submodule("log", "Logging module");
   dolfin_wrappers::log(log);
 
-  // // Create function submodule [function]
+  // Create function submodule [function]
   py::module function = m.def_submodule("function", "Function module");
   dolfin_wrappers::function(function);
 
-  // // Create math submodule [math]
+  // Create math submodule [math]
   py::module math = m.def_submodule("math", "Math library module");
   dolfin_wrappers::math(math);
 
-  // // Create mesh submodule [mesh]
+  // Create mesh submodule [mesh]
   py::module mesh = m.def_submodule("mesh", "Mesh library module");
   dolfin_wrappers::mesh(mesh);
 
-  // // Create graph submodule [graph]
+  // Create graph submodule [graph]
   py::module graph = m.def_submodule("graph", "Graph module");
   dolfin_wrappers::graph(graph);
 
-  // // Create fem submodule [fem]
+  // Create fem submodule [fem]
   py::module fem = m.def_submodule("fem", "FEM module");
   dolfin_wrappers::fem(fem);
 
-  // // Create generation submodule [generation]
+  // Create generation submodule [generation]
   py::module generation
       = m.def_submodule("generation", "Mesh generation module");
   dolfin_wrappers::generation(generation);
@@ -77,7 +77,7 @@ PYBIND11_MODULE(cpp, m)
   py::module geometry = m.def_submodule("geometry", "Geometry module");
   dolfin_wrappers::geometry(geometry);
 
-  // // Create io submodule
+  // Create io submodule
   py::module io = m.def_submodule("io", "I/O module");
   dolfin_wrappers::io(io);
 
@@ -85,15 +85,15 @@ PYBIND11_MODULE(cpp, m)
   py::module la = m.def_submodule("la", "Linear algebra module");
   dolfin_wrappers::la(la);
 
-  // // Create nls submodule
+  // Create nls submodule
   py::module nls = m.def_submodule("nls", "Nonlinear solver module");
   dolfin_wrappers::nls(nls);
 
-  // // Create parameter submodule
+  // Create parameter submodule
   py::module parameter = m.def_submodule("parameter", "Parameter module");
   dolfin_wrappers::parameter(parameter);
 
-  // // Create refinement submodule
+  // Create refinement submodule
   py::module refinement = m.def_submodule("refinement", "Refinement module");
   dolfin_wrappers::refinement(refinement);
 
