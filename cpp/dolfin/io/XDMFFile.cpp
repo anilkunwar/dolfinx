@@ -387,7 +387,7 @@ void XDMFFile::write(const function::Function& u)
                      : num_points;
 
 #ifdef PETSC_USE_COMPLEX
-  std::vector<std::string> components = {"real"};
+  std::vector<std::string> components = {"real", "imag"};
 #else
   std::vector<std::string> components = {""};
 #endif
@@ -420,8 +420,8 @@ void XDMFFile::write(const function::Function& u)
     }
     // Add data item of component
     add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
-                  "/VisualisationVector/" + component + "/0", data_values,
-                  {num_values, width});
+                  "/VisualisationVector/" + component + "/0",
+                  component_data_values, {num_values, width});
 #else
     // Add data item
     add_data_item(_mpi_comm.comm(), attribute_node, h5_id,
