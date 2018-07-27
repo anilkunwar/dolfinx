@@ -202,7 +202,7 @@ def test_save_and_checkpoint_scalar(tempdir, encoding, fe_degree, fe_family,
     V = FunctionSpace(mesh, FE)
     u_in = Function(V)
     u_out = Function(V)
-    
+
     if has_petsc_complex():
         u_out.interpolate(Expression("x[0] + j*x[0]", degree=1))
     else:
@@ -338,7 +338,7 @@ def test_save_2d_vector(tempdir, encoding):
     V = VectorFunctionSpace(mesh, "Lagrange", 2)
     u = Function(V)
     A = imaginary_part()
-    c = Constant((1.0 + A, 2.0 + 2*A))
+    c = Constant((1.0 + A, 2.0 + 2 * A))
     u.interpolate(c)
 
     with XDMFFile(mesh.mpi_comm(), filename, encoding=encoding) as file:
@@ -353,7 +353,7 @@ def test_save_3d_vector(tempdir, encoding):
     mesh = UnitCubeMesh(MPI.comm_world, 2, 2, 2)
     u = Function(VectorFunctionSpace(mesh, "Lagrange", 1))
     A = imaginary_part()
-    c = Constant((1.0+ A, 2.0+ 2*A, 3.0+ 3*A))
+    c = Constant((1.0 + A, 2.0 + 2 * A, 3.0 + 3 * A))
     u.interpolate(c)
 
     with XDMFFile(mesh.mpi_comm(), filename, encoding=encoding) as file:
@@ -373,10 +373,10 @@ def test_save_3d_vector_series(tempdir, encoding):
         u.vector()[:] = 1.0 + A
         file.write(u, 0.1)
 
-        u.vector()[:] = 2.0 + 2*A
+        u.vector()[:] = 2.0 + 2 * A
         file.write(u, 0.2)
 
-        u.vector()[:] = 3.0 + 3*A
+        u.vector()[:] = 3.0 + 3 * A
         file.write(u, 0.3)
 
 
