@@ -53,11 +53,11 @@ public:
   /// use_mpio: whether using MPI or not
   /// use_chunking: whether using chunking or not
   template <typename T>
-  static void write_dataset(const hid_t file_handle,
-                            const std::string dataset_path, const T* data,
-                            const std::array<std::int64_t, 2> range,
-                            const std::vector<std::int64_t> global_size,
-                            bool use_mpio, bool use_chunking);
+  static void
+  write_dataset(const hid_t file_handle, const std::string dataset_path,
+                const T* data, const std::array<std::int64_t, 2> range,
+                const std::vector<std::int64_t> global_size, bool use_mpio,
+                bool use_chunking, const hsize_t* stride = NULL);
 
   /// Read data from a HDF5 dataset "dataset_path" as defined by
   /// range blocks on each process range: the local range on this
@@ -217,7 +217,8 @@ template <typename T>
 inline void HDF5Interface::write_dataset(
     const hid_t file_handle, const std::string dataset_path, const T* data,
     const std::array<std::int64_t, 2> range,
-    const std::vector<int64_t> global_size, bool use_mpi_io, bool use_chunking)
+    const std::vector<int64_t> global_size, bool use_mpi_io, bool use_chunking,
+    const hsize_t* stride)
 {
   // Data rank
   const std::size_t rank = global_size.size();
@@ -230,7 +231,11 @@ inline void HDF5Interface::write_dataset(
   }
 
   // Get HDF5 data type
-  const hid_t h5type = hdf5_type<T>();
+  hid_t h5type;
+  if (stride)
+    h5type = hdf5_type<double>();
+  else
+    h5type = hdf5_type<T>();
 
   // Hyperslab selection parameters
   std::vector<hsize_t> count(global_size.begin(), global_size.end());
@@ -288,8 +293,9 @@ inline void HDF5Interface::write_dataset(
 
   // Create a file dataspace within the global space - a hyperslab
   const hid_t filespace1 = H5Dget_space(dset_id);
-  status = H5Sselect_hyperslab(filespace1, H5S_SELECT_SET, offset.data(), NULL,
-                               count.data(), NULL);
+
+  status = H5Sselect_hyperslab(filespace1, H5S_SELECT_SET, offset.data(),
+                               stride, count.data(), NULL);
   assert(status != HDF5_FAIL);
 
   // Set parallel access
@@ -654,5 +660,5 @@ inline void HDF5Interface::get_attribute_value(const hid_t attr_type,
 }
 //---------------------------------------------------------------------------
 #endif
-}
-}
+} // namespace io
+} // namespace dolfin
