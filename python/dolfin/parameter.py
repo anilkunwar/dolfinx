@@ -74,9 +74,8 @@ def ffc_default_parameters():
         else:
             p.add(key, value)
 
-    # Change the scalar type in the complex mode
-    if has_petsc_complex():
-        p.update({"scalar_type": "double complex"})
+    # Update the scalar type according to the mode (real or complex)
+    p["scalar_type"] = "double complex" if has_petsc_complex() else "double"
 
     return p
 
