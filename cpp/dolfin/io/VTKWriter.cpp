@@ -116,6 +116,10 @@ void VTKWriter::write_cell_data(const function::Function& u,
   }
 
   // Get  values
+<<<<<<< HEAD
+=======
+  std::vector<PetscScalar> values(dof_set.size());
+>>>>>>> 118e0d55946a9b659f9abe52fbc74b2dda2f7a69
   assert(u.vector());
 #ifdef PETSC_USE_COMPLEX
   // fixme: Use Eigen::VectorXcd
@@ -140,7 +144,7 @@ void VTKWriter::write_cell_data(const function::Function& u,
 //----------------------------------------------------------------------------
 std::string VTKWriter::ascii_cell_data(const mesh::Mesh& mesh,
                                        const std::vector<std::size_t>& offset,
-                                       const std::vector<double>& values,
+                                       const std::vector<PetscScalar>& values,
                                        std::size_t data_dim, std::size_t rank)
 {
   std::ostringstream ss;
