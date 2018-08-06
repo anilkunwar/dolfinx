@@ -134,7 +134,7 @@ jobs:
       - run: *configure-cpp
       - run: *build-install-cpp
       - run: *unit-tests-cpp
-      - run: *demos-cpp
+      - run: *demos-cpp-complex
       - run: *python-interface
       - run: *build-documentation-python
       - run: *flake8-unit-tests
