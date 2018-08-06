@@ -10,7 +10,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/multi_array.hpp>
 #include <boost/unordered_map.hpp>
-#include <complex>
 #include <cstdio>
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/Timer.h>
@@ -140,18 +139,12 @@ void HDF5File::write(const la::PETScVector& x, const std::string dataset_name)
   std::vector<PetscScalar> local_data;
   x.get_local(local_data);
 
-  std::vector<double> real_data(local_data.size(), 0.0);
-  for (unsigned i = 0; i < local_data.size(); i++)
-  {
-    real_data[i] = std::real(local_data[i]);
-  }
-
   // Write data to file
   const auto local_range = x.local_range();
   const bool chunking = parameters["chunking"];
   const std::vector<std::int64_t> global_size(1, x.size());
   const bool mpi_io = _mpi_comm.size() > 1 ? true : false;
-  HDF5Interface::write_dataset(_hdf5_file_id, dataset_name, real_data.data(),
+  HDF5Interface::write_dataset(_hdf5_file_id, dataset_name, local_data.data(),
                                local_range, global_size, mpi_io, chunking);
 
   // Add partitioning attribute to dataset

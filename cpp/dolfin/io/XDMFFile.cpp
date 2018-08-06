@@ -35,7 +35,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 using namespace dolfin;
@@ -1923,21 +1922,8 @@ void XDMFFile::add_data_item(MPI_Comm comm, pugi::xml_node& xml_node,
         = {{offset, offset + local_shape0}};
 
     const bool use_mpi_io = (MPI::size(comm) > 1);
-
-    // Check if we are trying to write complex
-    if (std::is_same<typename T::value_type, PetscComplex>::value)
-    {
-      const PetscReal* data = reinterpret_cast<const PetscReal*>(x.data());
-      const long long unsigned int stride = 2;
-      HDF5Interface::write_dataset(h5_id, h5_path, data, local_range, shape,
-                                   use_mpi_io, false, &stride);
-    }
-    else
-    {
-      const typename T::value_type* data = x.data();
-      HDF5Interface::write_dataset(h5_id, h5_path, data, local_range, shape,
-                                   use_mpi_io, false);
-    }
+    HDF5Interface::write_dataset(h5_id, h5_path, x.data(), local_range, shape,
+                                 use_mpi_io, false);
 
     // Add partitioning attribute to dataset
     std::vector<std::size_t> partitions;

@@ -358,6 +358,7 @@ void HDF5Utility::set_local_vector_values(
       vector_values[rindex[j] - vector_range[0]] = rval[j];
     }
   }
+
   x.set_local(vector_values);
   x.apply();
 }

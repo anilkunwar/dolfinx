@@ -6,7 +6,6 @@
 
 #pragma once
 
-
 #include "HDF5Interface.h"
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/Variable.h>

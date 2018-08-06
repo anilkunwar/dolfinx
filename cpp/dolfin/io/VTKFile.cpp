@@ -254,8 +254,7 @@ void VTKFile::write_point_data(const function::GenericFunction& u,
   fp.precision(16);
 
   // Get function values at vertices
-  auto values_complex = u.compute_point_values(mesh);
-  EigenRowArrayXXd values = values_complex.real();
+  auto values = u.compute_point_values(mesh);
 
   if (rank == 0)
   {

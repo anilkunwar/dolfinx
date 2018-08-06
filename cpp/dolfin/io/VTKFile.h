@@ -22,14 +22,14 @@ namespace function
 {
 class Function;
 class GenericFunction;
-} // namespace function
+}
 
 namespace mesh
 {
 class Mesh;
 template <typename T>
 class MeshFunction;
-} // namespace mesh
+}
 
 namespace io
 {
@@ -135,5 +135,5 @@ private:
 
   void pvtu_write_mesh(pugi::xml_node xml_node) const;
 };
-} // namespace io
-} // namespace dolfin
+}
+}
