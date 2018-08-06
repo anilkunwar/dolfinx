@@ -195,10 +195,11 @@ workflows:
   version: 2
   build-and-pushdoc:
     jobs:
+      - build
       - build-complex
       - pushdoc:
           requires:
-            - build
+            - build-complex
           filters:
             branches:
               only:
